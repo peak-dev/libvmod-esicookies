@@ -1,0 +1,76 @@
+varnishtest "test vmod_esicookies"
+server s1 {
+        rxreq
+        expect req.http.Cookie == "fromclient=1"
+        txresp -hdr "Set-Cookie: fromserver1=1" -body {
+                <html>
+                Before include
+                <esi:include src="/body1"/>
+                After include 1
+                <esi:include src="/body2"/>
+                After include 2
+                <esi:include src="/body3"/>
+                After include 3
+                <esi:include src="/body4"/>
+                After include 4
+        }
+        rxreq 
+        expect req.url == "/body1"
+        expect req.http.Cookie == "fromclient=1; fromserver1=1"
+        txresp -hdr "Set-Cookie: frombody1=1; Secure" \
+	       -hdr "Set-Cookie: fromserver1=2; Domain=.foo.com; Path=/; Expires=Wed, 13-Jan-2021 22:23:01 GMT; HttpOnly" \
+	       -body {
+                Included file
+        }
+        rxreq 
+        expect req.url == "/body2"
+        expect req.http.Cookie == "fromclient=1; frombody1=1; fromserver1=2"
+        txresp -hdr "Set-Cookie:   a=1" \
+	       -hdr "Set-Cookie: b  =2" \
+	       -hdr "Set-Cookie: c=   3" \
+	       -hdr "Set-Cookie: d=4    " \
+	       -hdr "Set-Cookie: e=5    ; foobar" \
+	       -hdr "Set-Cookie: f=   3; foobar" \
+	       -body {
+                Included file
+        }
+        rxreq 
+        expect req.url == "/body3"
+        expect req.http.Cookie == "fromclient=1; frombody1=1; fromserver1=2; a=1; b=2; c=3; d=4; e=5; f=3"
+        txresp -body {
+                Included file
+        }
+        rxreq 
+        expect req.url == "/body4"
+        txresp -body {
+                Included file
+        }
+} -start
+
+varnish v1 -vcl+backend {
+	import esicookies from "${vmod_topbuild}/src/.libs/libvmod_esicookies.so" ;
+
+	sub vcl_fetch {
+	    if (req.url == "/body2") {
+		esicookies.to_http0(beresp.http.Set-Cookie);
+	    } else {
+		set req.http.X-Err = esicookies.to_http0_e(beresp.http.Set-Cookie);
+		if (req.http.X-Err != "") {
+			error 503 "Error in to_http0";
+		}
+		unset req.http.X-Err;
+	    }
+	    set beresp.do_esi = true;
+	}
+
+	sub vcl_error {
+		if (req.http.X-Err) {
+			set obj.http.X-Err = req.http.X-Err;
+		}
+	}
+} -start
+
+client c1 {
+	txreq -url "/"  -hdr "Cookie: fromclient=1"
+	rxresp
+} -run
