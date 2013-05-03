@@ -194,8 +194,10 @@ http0_mem_ws_alloc(struct http0_mem *m) {
 static struct ws *
 http0_get_mem(struct sess *sp, struct http0_meta *meta) {
 	struct ws 		*ws;
-	struct http0_mem	*m = &meta->mem[sp->id];
+	struct http0_mem	*m;
 
+	assert(sp->id < meta->nmem);
+	m = &meta->mem[sp->id];
 	CHECK_OBJ_NOTNULL(m, VMOD_HTTP0_MEM_MAGIC);
 
 	if (m->ws[0].s) {
@@ -244,9 +246,9 @@ vesico_cookie_lookup(struct cookiehead *cookies, const txt name) {
 	assert(l);
 
 	VSTAILQ_FOREACH(c, cookies, list) {
-		if (Tlen(c->name) != l)
-			continue;
 		if (! c->valid)
+			continue;
+		if (Tlen(c->name) != l)
 			continue;
 		if (strncmp(c->name.b, name.b, l) == 0)
 			return c;
@@ -315,6 +317,7 @@ vesico_analyze_cookie_header(struct sess *sp, const txt hdr,
 
 		if (! Tlen(c->name))
 			goto cookie_invalid;
+
 		if (! Tlen(c->value))
 			goto cookie_invalid;
 
@@ -370,7 +373,7 @@ vesico_write_cookie_hdr(struct sess *sp, struct http0_meta *meta, struct http *h
 		return "new cookies: not even the header name fits";
 	}
 	memcpy(b, H_COOKIE + 1, *H_COOKIE);
-	b += *H_COOKIE;
+	b   += *H_COOKIE;
 	*b++ = ' ';
 		
 	VSTAILQ_FOREACH(c, cookies, list) {
