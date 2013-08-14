@@ -1,5 +1,5 @@
 AC_PREREQ(2.59)
-AC_COPYRIGHT([Copyright (c) 2013 UPLEX - Nils Goroll Systemoptimierung, 2011 Varnish Software AS])
+AC_COPYRIGHT([Copyright (c) 2013 UPLEX - Nils Goroll Systemoptimierung])
 AC_INIT([libvmod-esicookies], [master])
 AC_CONFIG_MACRO_DIR([m4])
 AC_CONFIG_SRCDIR(src/vmod_esicookies.vcc)
