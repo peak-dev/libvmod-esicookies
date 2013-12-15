@@ -1,0 +1,213 @@
+varnishtest "vmod_esicookies corner cases"
+
+server s1 {
+        # cookie with empty value from client
+        rxreq
+        expect req.url == "/includer1"
+        expect req.http.Cookie == "fromclient="
+        txresp -body {
+                <html>
+                Before include
+                <esi:include src="/included1"/>
+                After include
+        }
+        rxreq 
+        expect req.url == "/included1"
+        expect req.http.Cookie == "fromclient="
+        txresp -body {
+                Included file
+        }
+
+        # cookie with name but no equals sign or value from client
+        rxreq
+        expect req.url == "/includer2"
+        expect req.http.Cookie == "fromclient"
+        txresp -body {
+                <html>
+                Before include
+                <esi:include src="/included2"/>
+                After include
+        }
+        rxreq 
+        expect req.url == "/included2"
+        expect req.http.Cookie == "fromclient"
+        txresp -body {
+                Included file
+        }
+
+        # empty cookie header from client
+        rxreq
+        expect req.url == "/includer3"
+        expect req.http.Cookie == ""
+        txresp -body {
+                <html>
+                Before include
+                <esi:include src="/included3"/>
+                After include
+        }
+        rxreq 
+        expect req.url == "/included3"
+        expect req.http.Cookie == ""
+        txresp -body {
+                Included file
+        }
+
+        # cookie with equals sign and value but no name from client
+        rxreq
+        expect req.url == "/includer4"
+        expect req.http.Cookie == "=1"
+        txresp -body {
+                <html>
+                Before include
+                <esi:include src="/included4"/>
+                After include
+        }
+        rxreq 
+        expect req.url == "/included4"
+        expect req.http.Cookie == "=1"
+        txresp -body {
+                Included file
+        }
+
+        # cookie with empty value from response
+        rxreq
+        expect req.url == "/includer5"
+        expect req.http.Cookie == "fromclient=1"
+        txresp -hdr "Set-Cookie: fromresponse=" \
+               -body {
+                <html>
+                Before include
+                <esi:include src="/included5"/>
+                After include
+        }
+        rxreq 
+        expect req.url == "/included5"
+        expect req.http.Cookie == "fromclient=1"
+        txresp -body {
+                Included file
+        }
+
+        # Set-Cookie response with name but no equals sign or value
+        rxreq
+        expect req.url == "/includer6"
+        expect req.http.Cookie == "fromclient=1"
+        txresp -hdr "Set-Cookie: fromresponse" \
+               -body {
+                <html>
+                Before include
+                <esi:include src="/included6"/>
+                After include
+        }
+        rxreq 
+        expect req.url == "/included6"
+        expect req.http.Cookie == "fromclient=1"
+        txresp -body {
+                Included file
+        }
+
+        # empty Set-Cookie response
+        rxreq
+        expect req.url == "/includer7"
+        expect req.http.Cookie == "fromclient=1"
+        txresp -hdr "Set-Cookie:" \
+               -body {
+                <html>
+                Before include
+                <esi:include src="/included7"/>
+                After include
+        }
+        rxreq 
+        expect req.url == "/included7"
+        expect req.http.Cookie == "fromclient=1"
+        txresp -body {
+                Included file
+        }
+
+        # Set-Cookie response with equals sign and value but no name
+        rxreq
+        expect req.url == "/includer8"
+        expect req.http.Cookie == "fromclient=1"
+        txresp -hdr "Set-Cookie: =1" \
+               -body {
+                <html>
+                Before include
+                <esi:include src="/included8"/>
+                After include
+        }
+        rxreq 
+        expect req.url == "/included8"
+        expect req.http.Cookie == "fromclient=1"
+        txresp -body {
+                Included file
+        }
+} -start
+
+varnish v1 -vcl+backend {
+	import esicookies from "${vmod_topbuild}/src/.libs/libvmod_esicookies.so" ;
+
+	sub vcl_fetch {
+            set req.http.X-Err = esicookies.to_http0_e(beresp.http.Set-Cookie);
+	    set beresp.do_esi = true;
+	}
+
+        sub vcl_deliver {
+            if (req.http.X-Err) {
+               set resp.http.X-Err = req.http.X-Err;
+            }
+        }
+} -start
+
+client c1 {
+        # cookie with empty value from client
+	txreq -url "/includer1"  -hdr "Cookie: fromclient="
+	rxresp
+        expect resp.body == "\n                <html>\n                Before include\n                \n                Included file\n        \n                After include\n        "
+        expect resp.bodylen == 149
+        expect resp.http.X-Err == "Invalid argument"
+
+        # cookie with name but no equals sign or value from client
+	txreq -url "/includer2"  -hdr "Cookie: fromclient"
+	rxresp
+        expect resp.bodylen == 149
+        expect resp.http.X-Err == "Invalid argument"
+
+        # empty cookie header from client
+	txreq -url "/includer3"  -hdr "Cookie:"
+	rxresp
+        expect resp.bodylen == 149
+        expect resp.http.X-Err == "Invalid argument"
+
+        # cookie with equals sign and value but no name from client
+	txreq -url "/includer4"  -hdr "Cookie: =1"
+	rxresp
+        expect resp.bodylen == 149
+        expect resp.http.X-Err == "Invalid argument"
+
+        # Set-Cookie response with empty value
+	txreq -url "/includer5" -hdr "Cookie: fromclient=1"
+	rxresp
+        expect resp.bodylen == 149
+        expect resp.http.Set-Cookie == "fromresponse="
+        expect resp.http.X-Err == "Invalid argument"
+
+        # Set-Cookie response with name but no equals sign or value
+	txreq -url "/includer6" -hdr "Cookie: fromclient=1"
+	rxresp
+        expect resp.bodylen == 149
+        expect resp.http.Set-Cookie == "fromresponse"
+        expect resp.http.X-Err == "Invalid argument"
+
+        # empty Set-Cookie response
+	txreq -url "/includer7" -hdr "Cookie: fromclient=1"
+	rxresp
+        expect resp.bodylen == 149
+        expect resp.http.Set-Cookie == ""
+        expect resp.http.X-Err == "Invalid argument"
+
+        # Set-Cookie response with equals sign and value but no name
+	txreq -url "/includer8" -hdr "Cookie: fromclient=1"
+	rxresp
+        expect resp.bodylen == 149
+        expect resp.http.Set-Cookie == "=1"
+        expect resp.http.X-Err == "Invalid argument"
+} -run

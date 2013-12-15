@@ -285,6 +285,8 @@ vesico_analyze_cookie_header(struct sess *sp, const txt hdr,
 		while (isspace(*pp))
 			pp--;
 		c->name.e = pp + 1;
+		if (c->name.b >= c->name.e)
+			goto cookie_invalid;
 
 		p++;
 		while (isspace(*p))
@@ -297,7 +299,8 @@ vesico_analyze_cookie_header(struct sess *sp, const txt hdr,
 			while (isspace(*pp))
 				pp--;
 			pp++;
-			assert(pp > c->value.b);
+			if (pp <= c->value.b)
+				goto cookie_invalid;
 			c->value.e = pp;
 			
 			// skip forward to next cookie
@@ -309,7 +312,8 @@ vesico_analyze_cookie_header(struct sess *sp, const txt hdr,
 			while (isspace(*pp))
 				pp--;
 			pp++;
-			assert(pp > c->value.b);
+			if (pp <= c->value.b)
+				goto cookie_invalid;
 			c->value.e = pp;
 
 			p = NULL;
@@ -331,11 +335,10 @@ vesico_analyze_cookie_header(struct sess *sp, const txt hdr,
 		continue;
 
 	  cookie_invalid:
-		DSL(0x40000000, SLT_Debug, sp->fd ? sp->fd : sp->id, "%s vmod_http0: invalid Cookie %s",
-		    sp->fd ? "fd" : "id",
-		    c->name.b);
-
+		WSP(sp, SLT_VCL_error,
+		    "vmod esicookies http0: invalid header '%s'", hdr.b);
 		cs->used--;
+		return EINVAL;
 	}
 	return 0;
 }

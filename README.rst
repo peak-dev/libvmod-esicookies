@@ -99,7 +99,8 @@ Possible return strings are:
 * "Value too large for defined data type" or your current locale's
   translation for ``EOVERFLOW``: too many cookies in use (see
   limitations_)
-
+* "Invalid argument" or your current locale's translation for
+  ``EINVAL``: a Cookie or Set-Cookie header had an illegal syntax
 * "new cookies: not even the header name fits"
 * "new cookies dont fit": Cookies don't fit into the workspace of size
   ``HTTP0_WS_SIZE`` (see limitations_)
