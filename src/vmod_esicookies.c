@@ -75,6 +75,7 @@ vrt_selecthttp(const struct sess *sp, enum gethdr_e where)
 	return (hp);
 }
 
+#if (HAVE_DECL_HTTP_ISHDR != 1)
 static int
 http_IsHdr(const txt *hh, const char *hdr)
 {
@@ -88,6 +89,7 @@ http_IsHdr(const txt *hh, const char *hdr)
 	hdr++;
 	return (!strncasecmp(hdr, hh->b, l));
 }
+#endif
 
 /* ----------------------------------------------------------------------
  * our own per-session workspaces for modifications of the http0 object.

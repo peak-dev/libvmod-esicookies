@@ -70,6 +70,11 @@ if test "x$VMODDIR" = x; then
 	fi
 fi
 
+save_CPPFLAGS="${CPPFLAGS}"
+CPPFLAGS="${CPPFLAGS} -I${VARNISHSRC}/include -I${VARNISHSRC}/bin/varnishd"
+AC_CHECK_DECLS([http_IsHdr], [], [], [#include "cache.h"])
+CPPFLAGS="${save_CPPFLAGS}"
+
 # This corresponds to FreeBSD's WARNS level 6
 DEVELOPER_CFLAGS="-Wall -Wstrict-prototypes \
 -Wmissing-prototypes \
