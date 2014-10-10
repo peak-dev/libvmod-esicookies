@@ -1,4 +1,3 @@
-
 AM_CPPFLAGS = \
 	-I$(VARNISHSRC)/include \
 	-I$(VARNISHSRC)/bin/varnishd
@@ -10,7 +9,8 @@ vmod_LTLIBRARIES = libvmod_esicookies.la
 vmod_srcdir = $(top_srcdir)/src
 vmodtool = $(VARNISHSRC)/lib/libvmod_std/vmod.py
 
-libvmod_esicookies_la_LDFLAGS = $(AM_LDFLAGS) -module -export-dynamic -avoid-version -shared
+libvmod_esicookies_la_LDFLAGS = $(AM_LDFLAGS) \
+	-module -export-dynamic -avoid-version -shared
 
 libvmod_esicookies_la_SOURCES = \
 	vmod_esicookies.c
@@ -19,7 +19,9 @@ nodist_libvmod_esicookies_la_SOURCES = \
 	vcc_if.c \
 	vcc_if.h
 
-# BUILT_SOURCES is only a hack and dependency tracking does not help for the first build
+# BUILT_SOURCES is only a hack and dependency tracking does not help
+# for the first build
+
 vmod_esicookies.lo: vcc_if.h
 
 vcc_if.c vcc_if.h: $(vmodtool) $(vmod_srcdir)/vmod_esicookies.vcc
@@ -39,4 +41,3 @@ EXTRA_DIST = \
 	$(VMOD_TESTS)
 
 CLEANFILES = $(builddir)/vcc_if.c $(builddir)/vcc_if.h
-

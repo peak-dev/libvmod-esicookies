@@ -1,5 +1,5 @@
 /*-
- * Copyright (c) 2013 UPLEX Nils Goroll Systemoptimierung
+ * Copyright (c) 2013-2014 UPLEX Nils Goroll Systemoptimierung
  * All rights reserved
  *
  * Author: Nils Goroll <nils.goroll@uplex.de>
@@ -48,45 +48,45 @@
 static struct http *
 vrt_selecthttp(const struct sess *sp, enum gethdr_e where)
 {
-        struct http *hp;
+	struct http *hp;
 
-        CHECK_OBJ_NOTNULL(sp, SESS_MAGIC);
-        switch (where) {
-        case HDR_REQ:
-                hp = sp->http;
-                break;
-        case HDR_BEREQ:
-                hp = sp->wrk->bereq;
-                break;
-        case HDR_BERESP:
-                hp = sp->wrk->beresp;
-                break;
-        case HDR_RESP:
-                hp = sp->wrk->resp;
-                break;
-        case HDR_OBJ:
-                CHECK_OBJ_NOTNULL(sp->obj, OBJECT_MAGIC);
-                hp = sp->obj->http;
-                break;
-        default:
-                INCOMPL();
-        }
-        CHECK_OBJ_NOTNULL(hp, HTTP_MAGIC);
-        return (hp);
+	CHECK_OBJ_NOTNULL(sp, SESS_MAGIC);
+	switch (where) {
+	case HDR_REQ:
+		hp = sp->http;
+		break;
+	case HDR_BEREQ:
+		hp = sp->wrk->bereq;
+		break;
+	case HDR_BERESP:
+		hp = sp->wrk->beresp;
+		break;
+	case HDR_RESP:
+		hp = sp->wrk->resp;
+		break;
+	case HDR_OBJ:
+		CHECK_OBJ_NOTNULL(sp->obj, OBJECT_MAGIC);
+		hp = sp->obj->http;
+		break;
+	default:
+		INCOMPL();
+	}
+	CHECK_OBJ_NOTNULL(hp, HTTP_MAGIC);
+	return (hp);
 }
 
 static int
 http_IsHdr(const txt *hh, const char *hdr)
 {
-        unsigned l;
+	unsigned l;
 
-        Tcheck(*hh);
-        AN(hdr);
-        l = hdr[0];
-        assert(l == strlen(hdr + 1));
-        assert(hdr[l] == ':');
-        hdr++;
-        return (!strncasecmp(hdr, hh->b, l));
+	Tcheck(*hh);
+	AN(hdr);
+	l = hdr[0];
+	assert(l == strlen(hdr + 1));
+	assert(hdr[l] == ':');
+	hdr++;
+	return (!strncasecmp(hdr, hh->b, l));
 }
 
 /* ----------------------------------------------------------------------
@@ -124,7 +124,7 @@ http0_free(void *ptr) {
 		return;
 
 	CHECK_OBJ_NOTNULL(meta, VMOD_HTTP0_META_MAGIC);
-	
+
 	if (meta->nmem) {
 		for (i = 0; i < meta->nmem; i++) {
 			m = &(meta->mem[i]);
@@ -150,7 +150,7 @@ init_function(struct vmod_priv *priv, const struct VCL_conf *cfg)
 	struct rlimit		nofile, rltest;
 	int			i;
 
-        (void)cfg;
+	(void)cfg;
 
 	AZ(getrlimit(RLIMIT_NOFILE, &nofile));
 
@@ -173,7 +173,7 @@ init_function(struct vmod_priv *priv, const struct VCL_conf *cfg)
 
 	priv->priv = meta;
 	priv->free = http0_free;
-        return (0);
+	return (0);
 }
 
 static void
@@ -187,13 +187,15 @@ http0_mem_ws_alloc(struct http0_mem *m) {
 
 	AN(space);
 
-	WS_Init(&m->ws[0], "http0 ws[0]",  space,                  HTTP0_WS_SIZE);
-	WS_Init(&m->ws[1], "http0 ws[1]", (space + HTTP0_WS_SIZE), HTTP0_WS_SIZE);
+	WS_Init(&m->ws[0], "http0 ws[0]",  space,
+	    HTTP0_WS_SIZE);
+	WS_Init(&m->ws[1], "http0 ws[1]", (space + HTTP0_WS_SIZE),
+	    HTTP0_WS_SIZE);
 }
 
 static struct ws *
 http0_get_mem(struct sess *sp, struct http0_meta *meta) {
-	struct ws 		*ws;
+	struct ws		*ws;
 	struct http0_mem	*m;
 
 	assert(sp->id < meta->nmem);
@@ -204,7 +206,7 @@ http0_get_mem(struct sess *sp, struct http0_meta *meta) {
 		if (m->xid != sp->xid) {
 			m->xid = sp->xid;
 		}
-		
+
 		ws = &m->ws[m->next_ws];
 		m->next_ws = m->next_ws ? 0 : 1;
 		WS_Reset(ws, NULL);
@@ -226,7 +228,7 @@ struct cookie {
 };
 VSTAILQ_HEAD(cookiehead, cookie);
 
-/* 
+/*
  * http://webdesign.about.com/od/cookies/f/cookies-per-domain-limit.htm
  *  Chrome 9 allowed 180 cookies per domain
  */
@@ -259,7 +261,7 @@ vesico_cookie_lookup(struct cookiehead *cookies, const txt name) {
 
 static int
 vesico_analyze_cookie_header(struct sess *sp, const txt hdr,
-                      struct cookiehead *cookies, struct cookies *cs) {
+		      struct cookiehead *cookies, struct cookies *cs) {
 	char	*p = hdr.b;
 	char	*pp;
 
@@ -302,7 +304,7 @@ vesico_analyze_cookie_header(struct sess *sp, const txt hdr,
 			if (pp <= c->value.b)
 				goto cookie_invalid;
 			c->value.e = pp;
-			
+
 			// skip forward to next cookie
 			p++;
 			while (isspace(*p))
@@ -360,7 +362,8 @@ vesico_analyze_cookie_header(struct sess *sp, const txt hdr,
 const char *H_COOKIE = "\007Cookie:";
 
 static const char *
-vesico_write_cookie_hdr(struct sess *sp, struct http0_meta *meta, struct http *h0, struct cookiehead *cookies)
+vesico_write_cookie_hdr(struct sess *sp, struct http0_meta *meta,
+			struct http *h0, struct cookiehead *cookies)
 {
 	unsigned	u;
 	char *b = NULL, *e = NULL;
@@ -378,11 +381,11 @@ vesico_write_cookie_hdr(struct sess *sp, struct http0_meta *meta, struct http *h
 	memcpy(b, H_COOKIE + 1, *H_COOKIE);
 	b   += *H_COOKIE;
 	*b++ = ' ';
-		
+
 	VSTAILQ_FOREACH(c, cookies, list) {
 		if (! c->valid)
 			continue;
-		
+
 		// data we read must not be from the ws we write to
 		assert(! ((c->name.b >= ws->s) && (c->name.e <= ws->e)));
 
@@ -413,23 +416,27 @@ vesico_write_cookie_hdr(struct sess *sp, struct http0_meta *meta, struct http *h
 	http_SetHeader(sp->wrk, sp->fd, h0, ws->f);
 
 	WS_ReleaseP(ws, b);
-	
+
 	return "";
 }
 
-// XXX optimize for the case where existing cookie is tail of CS and we don't change existing cookies ?
+/*
+ * XXX TODO optimize for the case where existing cookie is tail of CS and we
+ * don't change existing cookies ?
+ */
 
 static const char *
-vesico_to_http0(struct sess *sp, struct vmod_priv *priv, enum gethdr_e where, const char *hdr)
+vesico_to_http0(struct sess *sp, struct vmod_priv *priv, enum gethdr_e where,
+		const char *hdr)
 {
 	struct http0_meta	*meta = priv->priv;
 
-	struct cookiehead	cookies = 
+	struct cookiehead	cookies =
 	    VSTAILQ_HEAD_INITIALIZER(cookies);
 	struct cookies	cs;
 
 	cs.used = 0;
-	
+
 	struct http		*hp, *h0;
 	unsigned		n;
 	int			used;
@@ -442,17 +449,18 @@ vesico_to_http0(struct sess *sp, struct vmod_priv *priv, enum gethdr_e where, co
 
 	/* collect existing cookies */
 	for (n = HTTP_HDR_FIRST; n < h0->nhd; n++) {
-                if (http_IsHdr(&h0->hd[n], H_COOKIE)) {
+		if (http_IsHdr(&h0->hd[n], H_COOKIE)) {
 			int			ret;
 			txt			h;
 
-                        Tcheck(h0->hd[n]);
+			Tcheck(h0->hd[n]);
 			h.b = h0->hd[n].b + *H_COOKIE;
 			while (isspace(*(h.b)))
 				h.b++;
 			h.e = h0->hd[n].e;
 
-			ret = vesico_analyze_cookie_header(sp, h, &cookies, &cs);
+			ret = vesico_analyze_cookie_header(sp, h, &cookies,
+			    &cs);
 			if (ret) {
 				return strerror(ret);
 			}
@@ -464,12 +472,12 @@ vesico_to_http0(struct sess *sp, struct vmod_priv *priv, enum gethdr_e where, co
 	/* collect cookies from the set-cookie hdr given */
 	hp = vrt_selecthttp(sp, where);
 	for (n = HTTP_HDR_FIRST; n < hp->nhd; n++) {
-                if (http_IsHdr(&hp->hd[n], hdr)) {
+		if (http_IsHdr(&hp->hd[n], hdr)) {
 			int			ret;
 			txt			h;
 			char			*p;
 
-                        Tcheck(hp->hd[n]);
+			Tcheck(hp->hd[n]);
 			h.b = hp->hd[n].b + *hdr;
 			while (isspace(*(h.b)))
 				h.b++;
@@ -480,7 +488,8 @@ vesico_to_http0(struct sess *sp, struct vmod_priv *priv, enum gethdr_e where, co
 			else
 				h.e = hp->hd[n].e;
 
-			ret = vesico_analyze_cookie_header(sp, h, &cookies, &cs);
+			ret = vesico_analyze_cookie_header(sp, h, &cookies,
+			    &cs);
 			if (ret) {
 				return strerror(ret);
 			}
@@ -492,14 +501,16 @@ vesico_to_http0(struct sess *sp, struct vmod_priv *priv, enum gethdr_e where, co
 		return "";
 
 	return (vesico_write_cookie_hdr(sp, meta, h0, &cookies));
-}			
+}
 
 const char * __match_proto__()
-vmod_to_http0_e(struct sess *sp, struct vmod_priv *priv, enum gethdr_e where, const char *hdr) {
+vmod_to_http0_e(struct sess *sp, struct vmod_priv *priv, enum gethdr_e where,
+		const char *hdr) {
 	return (vesico_to_http0(sp, priv, where, hdr));
 }
 
 void __match_proto__()
-vmod_to_http0(struct sess *sp, struct vmod_priv *priv, enum gethdr_e where, const char *hdr) {
+vmod_to_http0(struct sess *sp, struct vmod_priv *priv, enum gethdr_e where,
+	      const char *hdr) {
 	return (void)(vesico_to_http0(sp, priv, where, hdr));
-} 
+}

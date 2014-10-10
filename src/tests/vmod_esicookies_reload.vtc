@@ -1,62 +1,62 @@
 varnishtest "test vmod_esicookies reload (mem free)"
 server s1 {
-        rxreq
-        expect req.http.Cookie == "fromclient=1"
-        txresp -hdr "Set-Cookie: fromserver1=1" -body {
-                <html>
-                Before include
-                <esi:include src="/body1"/>
-                After include 1
-        }
-        rxreq 
-        expect req.url == "/body1"
-        expect req.http.Cookie == "fromclient=1; fromserver1=1"
-        txresp -hdr "Set-Cookie: frombody1=1; Secure" \
+	rxreq
+	expect req.http.Cookie == "fromclient=1"
+	txresp -hdr "Set-Cookie: fromserver1=1" -body {
+		<html>
+		Before include
+		<esi:include src="/body1"/>
+		After include 1
+	}
+	rxreq
+	expect req.url == "/body1"
+	expect req.http.Cookie == "fromclient=1; fromserver1=1"
+	txresp -hdr "Set-Cookie: frombody1=1; Secure" \
 	       -hdr "Set-Cookie: fromserver1=2; Domain=.foo.com; Path=/; Expires=Wed, 13-Jan-2021 22:23:01 GMT; HttpOnly" \
 	       -hdr "Connection: close" \
 	       -body {
-                Included file
-        }
+		Included file
+	}
 	close
 
 	accept
-        rxreq
-        expect req.http.Cookie == "fromclient=1"
-        txresp -hdr "Set-Cookie: fromserver1=1" -body {
-                <html>
-                Before include
-                <esi:include src="/body1"/>
-                After include 1
-        }
-        rxreq 
-        expect req.url == "/body1"
-        expect req.http.Cookie == "fromclient=1; fromserver1=1"
-        txresp -hdr "Set-Cookie: frombody1=1; Secure" \
+	rxreq
+	expect req.http.Cookie == "fromclient=1"
+	txresp -hdr "Set-Cookie: fromserver1=1" -body {
+		<html>
+		Before include
+		<esi:include src="/body1"/>
+		After include 1
+	}
+	rxreq
+	expect req.url == "/body1"
+	expect req.http.Cookie == "fromclient=1; fromserver1=1"
+	txresp -hdr "Set-Cookie: frombody1=1; Secure" \
 	       -hdr "Set-Cookie: fromserver1=2; Domain=.foo.com; Path=/; Expires=Wed, 13-Jan-2021 22:23:01 GMT; HttpOnly" \
 	       -hdr "Connection: close" \
 	       -body {
-                Included file
-        }
+		Included file
+	}
 	close
 
 	accept
-        rxreq
-        expect req.http.Cookie == "fromclient=1"
-        txresp -hdr "Set-Cookie: fromserver1=1" -body {
-                <html>
-                Before include
-                <esi:include src="/body1"/>
-                After include 1
-        }
-        rxreq 
-        expect req.url == "/body1"
-        expect req.http.Cookie == "fromclient=1; fromserver1=1"
-        txresp -hdr "Set-Cookie: frombody1=1; Secure" \
+	rxreq
+	expect req.http.Cookie == "fromclient=1"
+	txresp -hdr "Set-Cookie: fromserver1=1" -body {
+		<html>
+		Before include
+		<esi:include src="/body1"/>
+		After include 1
+	}
+	rxreq
+	expect req.url == "/body1"
+	expect req.http.Cookie == "fromclient=1; fromserver1=1"
+	txresp -hdr "Set-Cookie: frombody1=1; Secure" \
 	       -hdr "Set-Cookie: fromserver1=2; Domain=.foo.com; Path=/; Expires=Wed, 13-Jan-2021 22:23:01 GMT; HttpOnly" \
 	       -hdr "Connection: close" \
 	       -body {
-                Included file
-        }
+		Included file
+	}
 } -start
 
 shell "(echo 'backend foo { .host = \"${s1_addr}\"; .port = \"${s1_port}\"; }'; echo 'import esicookies from \"${vmod_topbuild}/src/.libs/libvmod_esicookies.so\";' ; cat ${vmod_topbuild}/src/tests/vmod_esicookies_reload.vcl ) >${tmpdir}/_esicookies_reload.vcl"
@@ -73,7 +73,7 @@ varnish v1 -expect n_vcl == 1
 varnish v1 -expect n_backend == 1
 
 client c1 {
-	txreq -url "/"  -hdr "Cookie: fromclient=1"
+	txreq -url "/"	-hdr "Cookie: fromclient=1"
 	rxresp
 } -run
 
@@ -84,7 +84,7 @@ varnish v1 -cliok "vcl.discard foo1"
 varnish v1 -cli "debug.backend" -cli "vcl.list"
 
 client c1 {
-	txreq -url "/"  -hdr "Cookie: fromclient=1"
+	txreq -url "/"	-hdr "Cookie: fromclient=1"
 	rxresp
 } -run
 
@@ -100,6 +100,6 @@ varnish v1 -expect n_backend == 1
 varnish v1 -cliok "vcl.discard foo2"
 
 client c1 {
-	txreq -url "/"  -hdr "Cookie: fromclient=1"
+	txreq -url "/"	-hdr "Cookie: fromclient=1"
 	rxresp
 } -run

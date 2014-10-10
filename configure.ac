@@ -1,5 +1,5 @@
 AC_PREREQ(2.59)
-AC_COPYRIGHT([Copyright (c) 2013 UPLEX - Nils Goroll Systemoptimierung])
+AC_COPYRIGHT([Copyright (c) 2014 UPLEX - Nils Goroll Systemoptimierung])
 AC_INIT([libvmod-esicookies], [master])
 AC_CONFIG_MACRO_DIR([m4])
 AC_CONFIG_SRCDIR(src/vmod_esicookies.vcc)
@@ -37,7 +37,10 @@ AC_HEADER_STDC
 AC_CHECK_HEADERS([sys/stdlib.h])
 
 # Check for python
-AC_CHECK_PROGS(PYTHON, [python3 python3.1 python3.2 python2.7 python2.6 python2.5 python2 python], [AC_MSG_ERROR([Python is needed to build this vmod, please install python.])])
+AC_CHECK_PROGS(PYTHON,
+	[python3 python3.1 python3.2 python2.7 python2.6 python2.5 python2 \
+	 python],
+	[AC_MSG_ERROR([Python is needed to build this vmod.])])
 
 # Varnish source tree
 AC_ARG_VAR([VARNISHSRC], [path to Varnish source tree (mandatory)])
@@ -53,11 +56,13 @@ AC_CHECK_FILE([$VARNISHSRC/include/varnishapi.h],
 # Check that varnishtest is built in the varnish source directory
 AC_CHECK_FILE([$VARNISHSRC/bin/varnishtest/varnishtest],
 	[],
-	[AC_MSG_FAILURE([Can't find "$VARNISHSRC/bin/varnishtest/varnishtest". Please build your varnish source directory])]
+	[AC_MSG_FAILURE([Can't find "$VARNISHSRC/bin/varnishtest/varnishtest". \
+Please run a build from your varnish source])]
 )
 
 # vmod installation dir
-AC_ARG_VAR([VMODDIR], [vmod installation directory @<:@LIBDIR/varnish/vmods@:>@])
+AC_ARG_VAR([VMODDIR], [vmod installation directory \
+@<:@LIBDIR/varnish/vmods@:>@])
 if test "x$VMODDIR" = x; then
 	VMODDIR=`pkg-config --variable=vmoddir varnishapi`
 	if test "x$VMODDIR" = x; then
@@ -66,29 +71,48 @@ if test "x$VMODDIR" = x; then
 fi
 
 # This corresponds to FreeBSD's WARNS level 6
-DEVELOPER_CFLAGS="-Wall -Wstrict-prototypes -Wmissing-prototypes -Wpointer-arith -Wreturn-type -Wcast-qual -Wwrite-strings -Wswitch -Wshadow -Wcast-align -Wunused-parameter -Wchar-subscripts -Winline -Wnested-externs -Wredundant-decls -Wformat"
+DEVELOPER_CFLAGS="-Wall -Wstrict-prototypes \
+-Wmissing-prototypes \
+-Wpointer-arith \
+-Wreturn-type \
+-Wcast-qual \
+-Wwrite-strings \
+-Wswitch \
+-Wshadow \
+-Wcast-align \
+-Wunused-parameter \
+-Wchar-subscripts \
+-Winline \
+-Wnested-externs \
+-Wredundant-decls -Wformat"
 
 # Additional flags for GCC 4
-EXTRA_DEVELOPER_CFLAGS="-Wextra -Wno-missing-field-initializers -Wno-sign-compare"
+EXTRA_DEVELOPER_CFLAGS="-Wextra \
+-Wno-missing-field-initializers \
+-Wno-sign-compare"
 
 # --enable-developer-warnings
 AC_ARG_ENABLE(developer-warnings,
-	AS_HELP_STRING([--enable-developer-warnings],[enable strict warnings (default is NO)]),
+	AS_HELP_STRING([--enable-developer-warnings],
+		       [enable strict warnings (default is NO)]),
 	CFLAGS="${CFLAGS} ${DEVELOPER_CFLAGS}")
 
 # --enable-debugging-symbols
 AC_ARG_ENABLE(debugging-symbols,
-	AS_HELP_STRING([--enable-debugging-symbols],[enable debugging symbols (default is NO)]),
+	AS_HELP_STRING([--enable-debugging-symbols],
+		       [enable debugging symbols (default is NO)]),
 	CFLAGS="${CFLAGS} -O0 -g -fno-inline")
 
 # --enable-diagnostics
 AC_ARG_ENABLE(diagnostics,
-	AS_HELP_STRING([--enable-diagnostics],[enable run-time diagnostics (default is NO)]),
+	AS_HELP_STRING([--enable-diagnostics],
+		       [enable run-time diagnostics (default is NO)]),
 	CFLAGS="${CFLAGS} -DDIAGNOSTICS")
 
 # --enable-extra-developer-warnings
 AC_ARG_ENABLE(extra-developer-warnings,
-	AS_HELP_STRING([--enable-extra-developer-warnings],[enable even stricter warnings (default is NO)]),
+	AS_HELP_STRING([--enable-extra-developer-warnings],
+		       [enable even stricter warnings (default is NO)]),
 	[],
 	[enable_extra_developer_warnings=no])
 
@@ -104,7 +128,8 @@ fi
 
 # --enable-stack-protector
 AC_ARG_ENABLE(stack-protector,
-	AS_HELP_STRING([--enable-stack-protector],[enable stack protector (default is NO)]),
+	AS_HELP_STRING([--enable-stack-protector],
+		       [enable stack protector (default is NO)]),
 	[],
 	[enable_stack_protector=no])
 
