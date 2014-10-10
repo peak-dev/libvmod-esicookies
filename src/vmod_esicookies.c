@@ -27,8 +27,8 @@
  *
  */
 
+#include "config.h"
 #include <ctype.h>
-#define __EXTENSIONS__
 #include <stdlib.h>
 #include <stdio.h>
 #include <strings.h>
