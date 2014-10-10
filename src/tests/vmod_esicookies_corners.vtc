@@ -61,6 +61,21 @@ server s1 {
 	expect req.http.Cookie == "=1"
 	txresp -body {Included file}
 
+	# cookie with no value within cookie header
+	rxreq
+	expect req.url == "/c_no_val_middle"
+	expect req.http.Cookie == "ok=val; noval=; ok2=val;"
+	txresp -body {
+		<html>
+		Before include
+		<esi:include src="/i_no_val_middle"/>
+		After include
+	}
+	rxreq
+	expect req.url == "/i_no_val_middle"
+	expect req.http.Cookie == "ok=val; noval=; ok2=val;"
+	txresp -body {Included file}
+
 	# cookie with empty value from response
 	rxreq
 	expect req.url == "/includer5"
@@ -169,6 +184,12 @@ client c1 {
 
 	# cookie with equals sign and value but no name from client
 	txreq -url "/includer4"	 -hdr "Cookie: =1"
+	rxresp
+	expect resp.bodylen == 60
+	expect resp.http.X-Err == "Invalid argument"
+
+	# cookie with no value within cookie header
+	txreq -url "/c_no_val_middle"	 -hdr "Cookie: ok=val; noval=; ok2=val;"
 	rxresp
 	expect resp.bodylen == 60
 	expect resp.http.X-Err == "Invalid argument"
