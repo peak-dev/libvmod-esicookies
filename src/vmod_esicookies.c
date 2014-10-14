@@ -4,6 +4,11 @@
  *
  * Author: Nils Goroll <nils.goroll@uplex.de>
  *
+ * Portions Copyright (c) 2014 Varnish Software AS
+ * All rights reserved.
+ *
+ * Author: Poul-Henning Kamp <phk@phk.freebsd.dk>
+ *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
  * are met:
@@ -34,6 +39,7 @@
 #include <strings.h>
 #include <sys/resource.h>
 #include "vrt.h"
+#include "vct.h"
 #include "cache.h"
 #include "vcc_if.h"
 #include "vas.h"
@@ -99,38 +105,67 @@ http_IsHdr(const txt *hh, const char *hdr)
  *
  */
 
-struct http0_mem {
+struct vesico_req {
 	unsigned		magic;
-#define VMOD_HTTP0_MEM_MAGIC	0x6874306d
+#define VESICO_REQ_MAGIC	0x6874306d
+
 	struct ws		ws[2];
 	unsigned		xid;
 	unsigned short		next_ws;
+
+	unsigned		warn;
 };
 
-#define HTTP0_WS_SIZE (4*1024)
+#define VESICO_WS_SIZE (4*1024)
 
-struct http0_meta {
+struct vesico_meta {
 	unsigned		magic;
-#define VMOD_HTTP0_META_MAGIC	0x68746d6d
-	struct http0_mem	*mem;
+#define VESICO_META_MAGIC	0x68746d6d
+	struct vesico_req	*mem;
 	unsigned		nmem;
 };
 
+/* return values */
+#define VESICO_OK		0
+#define VESICO_ERR_OVERFLOW	(1<<0)
+#define VESICO_ERR_LIM		(1<<1)
+
+const char * const vesico_err_str[VESICO_ERR_LIM] = {
+	[VESICO_OK] = "ok",
+	[VESICO_ERR_OVERFLOW] =
+	"exceeded number of allowed cookies"
+};
+
+/* warn member of vesico_req */
+#define VESICO_WARN_SKIPPED	(1<<0)
+#define VESICO_WARN_TOLERATED	(1<<1)
+#define VESICO_WARN_LIM	(1<<2)
+
+const char * const vesico_warn_str[VESICO_WARN_LIM] = {
+	[VESICO_OK] = "ok",
+	[VESICO_WARN_SKIPPED] =
+	"cookies skipped",
+	[VESICO_WARN_TOLERATED] =
+	"cookies tolerated",
+	[VESICO_WARN_TOLERATED|VESICO_WARN_SKIPPED] =
+	"cookies skipped and tolerated"
+};
+
 static void
-http0_free(void *ptr) {
-	struct http0_meta	*meta = ptr;
-	struct http0_mem	*m;
+vesico_free(void *ptr) {
+	struct vesico_meta	*meta = ptr;
+	struct vesico_req	*m;
 	int			i;
 
 	if (! meta)
 		return;
 
-	CHECK_OBJ_NOTNULL(meta, VMOD_HTTP0_META_MAGIC);
+	CHECK_OBJ_NOTNULL(meta, VESICO_META_MAGIC);
 
 	if (meta->nmem) {
 		for (i = 0; i < meta->nmem; i++) {
 			m = &(meta->mem[i]);
-			CHECK_OBJ_NOTNULL(m, VMOD_HTTP0_MEM_MAGIC);
+			CHECK_OBJ_NOTNULL(m, VESICO_REQ_MAGIC);
 			if (m->ws[0].s) {
 				WS_Assert(&m->ws[0]);
 				WS_Assert(&m->ws[1]);
@@ -148,7 +183,7 @@ http0_free(void *ptr) {
 int
 init_function(struct vmod_priv *priv, const struct VCL_conf *cfg)
 {
-	struct http0_meta	*meta;
+	struct vesico_meta	*meta;
 	struct rlimit		nofile, rltest;
 	int			i;
 
@@ -165,44 +200,70 @@ init_function(struct vmod_priv *priv, const struct VCL_conf *cfg)
 
 	meta = malloc(sizeof(*meta));
 	XXXAN(meta);
-	meta->magic = VMOD_HTTP0_META_MAGIC;
+	meta->magic = VESICO_META_MAGIC;
 	meta->nmem  = nofile.rlim_max;
 
-	meta->mem   = calloc(meta->nmem, sizeof(struct http0_mem));
+	meta->mem   = calloc(meta->nmem, sizeof(struct vesico_req));
 	XXXAN(meta->mem);
 	for (i = 0; i < meta->nmem; i++)
-		meta->mem[i].magic = VMOD_HTTP0_MEM_MAGIC;
+		meta->mem[i].magic = VESICO_REQ_MAGIC;
 
 	priv->priv = meta;
-	priv->free = http0_free;
+	priv->free = vesico_free;
 	return (0);
 }
 
 static void
-http0_mem_ws_alloc(struct http0_mem *m) {
+vesico_req_ws_alloc(struct vesico_req *m) {
 	char	*space;
 
 	AZ(m->ws[0].s);
 	AZ(m->ws[1].s);
 
-	space = valloc(2 * HTTP0_WS_SIZE);
+	space = valloc(2 * VESICO_WS_SIZE);
 
 	AN(space);
 
 	WS_Init(&m->ws[0], "http0 ws[0]",  space,
-	    HTTP0_WS_SIZE);
-	WS_Init(&m->ws[1], "http0 ws[1]", (space + HTTP0_WS_SIZE),
-	    HTTP0_WS_SIZE);
+	    VESICO_WS_SIZE);
+	WS_Init(&m->ws[1], "http0 ws[1]", (space + VESICO_WS_SIZE),
+	    VESICO_WS_SIZE);
 }
 
-static struct ws *
-http0_get_mem(struct sess *sp, struct http0_meta *meta) {
-	struct ws		*ws;
-	struct http0_mem	*m;
+static inline struct vesico_req *
+vesico_req(struct sess *sp, struct vesico_meta *meta) {
+	struct vesico_req	*m;
 
+	CHECK_OBJ_NOTNULL(meta, VESICO_META_MAGIC);
 	assert(sp->id < meta->nmem);
 	m = &meta->mem[sp->id];
-	CHECK_OBJ_NOTNULL(m, VMOD_HTTP0_MEM_MAGIC);
+	CHECK_OBJ_NOTNULL(m, VESICO_REQ_MAGIC);
+
+	return (m);
+}
+
+static inline void
+vesico_clear_warn(struct vesico_req *m) {
+	m->warn = VESICO_OK;
+}
+
+static inline void
+vesico_add_warn(struct vesico_req *m, unsigned warn) {
+	m->warn |= warn;
+}
+
+static inline unsigned
+vesico_r_warn(struct vesico_req *m) {
+	return (m->warn);
+}
+
+
+static struct ws *
+vesico_get_mem(struct sess *sp, struct vesico_req *m) {
+	struct ws		*ws;
+
+	CHECK_OBJ_NOTNULL(sp, SESS_MAGIC);
+	CHECK_OBJ_NOTNULL(m, VESICO_REQ_MAGIC);
 
 	if (m->ws[0].s) {
 		if (m->xid != sp->xid) {
@@ -215,7 +276,7 @@ http0_get_mem(struct sess *sp, struct http0_meta *meta) {
 		return (ws);
 	}
 
-	http0_mem_ws_alloc(m);
+	vesico_req_ws_alloc(m);
 	AZ(m->next_ws);
 	ws = &m->ws[0];
 	m->next_ws = 1;
@@ -261,73 +322,180 @@ vesico_cookie_lookup(struct cookiehead *cookies, const txt name) {
 	return NULL;
 }
 
+/*
+ * From cache_http.c - Original version written by phk
+ *
+ *-----------------------------------------------------------------------------
+ * Split source string at any of the separators, return pointer to first
+ * and last+1 char of substrings, with whitespace trimed at both ends.
+ * If sep being an empty string is shorthand for VCT::SP
+ * If stop is NULL, src is NUL terminated.
+ *
+ * modified to use txt as arguments and internally to be agnostic to the
+ * constness of txt in various varnish versions
+ */
+
 static int
-vesico_analyze_cookie_header(struct sess *sp, const txt hdr,
-		      struct cookiehead *cookies, struct cookies *cs) {
-	char	*p = hdr.b;
-	char	*pp;
+http_split(txt *where, const char *sep, txt *tok)
+{
+	txt p;
 
-	while (p) {
-		struct cookie	*c, *c2;
+	AN(where);
+	AN(where->b);
+	AN(sep);
+	AN(tok);
 
-		if (cs->used >= max_cookies)
-			return EOVERFLOW;
+	if (where->e == NULL)
+	    where->e = strchr(where->b, '\0');
+
+	for (p.b = where->b;
+	     p.b < where->e && (vct_issp(*p.b) || strchr(sep, *p.b));
+	     p.b++)
+		continue;
+
+	if (p.b >= where->e) {
+		tok->b = NULL;
+		tok->e = NULL;
+		return (0);
+	}
+
+	tok->b = p.b;
+	if (*sep == '\0') {
+		for (p.e = p.b + 1; p.e < where->e && !vct_issp(*p.e); p.e++)
+			continue;
+		tok->e = p.e;
+		where->b = p.e;
+		return (1);
+	}
+	for (p.e = p.b + 1; p.e < where->e && !strchr(sep, *p.e); p.e++)
+		continue;
+	where->b = p.e;
+	while (p.e > p.b && vct_issp(p.e[-1]))
+		p.e--;
+	tok->e = p.e;
+	return (1);
+}
+
+// XXX turn off logging?
+static inline void
+vesico_warn(struct sess *sp, struct vesico_req *m,
+	    unsigned action, const char *warn,
+	    const txt hdr, const txt where) {
+	txt		phdr;
+	unsigned	off;
+
+	assert(action > VESICO_OK);
+	assert(action < VESICO_WARN_LIM);
+
+	vesico_add_warn(m, action);
+
+	assert(where.b >= hdr.b);
+	assert(where.b < hdr.e);
+	off = where.b - hdr.b;
+
+	phdr.b = NULL;
+	if (off > 20) {
+		phdr.b = hdr.b + (off - 20);
+		off = 20;
+		phdr.e = hdr.e;
+	}
+
+	WSP(sp, SLT_VCL_error,
+	    "vmod esicookies http0 %s in hdr:", vesico_warn_str[action]);
+	if (phdr.b) {
+		WSP(sp, SLT_VCL_error,
+		    "...%.40s%s", phdr.b,
+		    ((phdr.e - phdr.b) > 40) ? "..." : "");
+		off += 3;
+	} else {
+		WSP(sp, SLT_VCL_error,
+		    "%.40s%s", hdr.b, ((hdr.e - hdr.b) > 40) ? "..." : "");
+	}
+	WSP(sp, SLT_VCL_error,
+	    "%*s^- %s", off, "", warn);
+}
+
+static int
+vesico_analyze_cookie_header(struct sess *sp, struct vesico_req *m,
+			     const txt hdr, struct cookiehead *cookies,
+			     struct cookies *cs) {
+	txt		work1, work2, elem, name, value;
+	struct cookie	*c, *c2;
+	unsigned	ret = VESICO_OK;
+
+	work1.b = hdr.b;
+	work1.e = hdr.e;
+
+	while (http_split(&work1, ";", &elem)) {
+		if (elem.b == NULL) {
+			assert(elem.e == NULL);
+			continue;
+		}
+
+		if (Tlen(elem) == 0)
+			continue;
+
+		if (*elem.b == '=') {
+			vesico_warn(sp, m, VESICO_WARN_SKIPPED,
+			    "no name", hdr, elem);
+			continue;
+		}
+
+		work2.b = elem.b;
+		work2.e = elem.e;
+
+		AN(http_split(&work2, "=", &name));
+
+		if (*work2.b != '=') {
+			vesico_warn(sp, m, VESICO_WARN_SKIPPED,
+			    "no equals", hdr, elem);
+			continue;
+		}
+		if (Tlen(name) == 0) {
+			vesico_warn(sp, m, VESICO_WARN_SKIPPED,
+			    "empty cookie name", hdr, elem);
+			continue;
+		}
+		if (! http_split(&work2, "=", &value) ||
+		    (value.b == NULL) ||
+		    (Tlen(value) == 0)) {
+			vesico_warn(sp, m, VESICO_WARN_TOLERATED,
+			    "empty cookie value", hdr, name);
+		}
+
+		if (cs->used >= max_cookies) {
+			ret |= VESICO_ERR_OVERFLOW;
+			return (ret);
+		}
 
 		c = &cs->space[cs->used++];
 
 		c->valid = 0;
 
-		while (isspace(*p))
-			p++;
-		c->name.b = p;
+		assert(name.b);
+		assert(name.e);
+		// cant be empty
+		assert(name.e > name.b);
+		assert(name.b >= hdr.b);
+		// and not last in hdr
+		assert(name.e < hdr.e);
 
-		p = strchr(p, '=');
-		if (! p)
-			goto cookie_invalid;
+		if (value.b != NULL) {
+			assert(value.b);
+			assert(value.e);
+			// can be length 0
+			assert(value.e >= value.b);
+			// but not first in hdr
+			assert(value.b > hdr.b);
 
-		pp = p - 1;
-		while (isspace(*pp))
-			pp--;
-		c->name.e = pp + 1;
-		if (c->name.b >= c->name.e)
-			goto cookie_invalid;
-
-		p++;
-		while (isspace(*p))
-			p++;
-		c->value.b = p;
-
-		p = strchr(p, ';');
-		if (p && p < hdr.e) {
-			pp = p - 1;
-			while (isspace(*pp))
-				pp--;
-			pp++;
-			if (pp <= c->value.b)
-				goto cookie_invalid;
-			c->value.e = pp;
-
-			// skip forward to next cookie
-			p++;
-			while (isspace(*p))
-				p++;
-		} else {
-			pp = hdr.e - 1;
-			while (isspace(*pp))
-				pp--;
-			pp++;
-			if (pp <= c->value.b)
-				goto cookie_invalid;
-			c->value.e = pp;
-
-			p = NULL;
+			assert(value.e <= hdr.e);
 		}
 
-		if (! Tlen(c->name))
-			goto cookie_invalid;
 
-		if (! Tlen(c->value))
-			goto cookie_invalid;
+		c->name.b = name.b;
+		c->name.e = name.e;
+		c->value.b = value.b;
+		c->value.e = value.e;
 
 		/* check if seen before and, if yes, make that one invalid */
 		c2 = vesico_cookie_lookup(cookies, c->name);
@@ -336,15 +504,8 @@ vesico_analyze_cookie_header(struct sess *sp, const txt hdr,
 
 		c->valid = 1;
 		VSTAILQ_INSERT_TAIL(cookies, c, list);
-		continue;
-
-	  cookie_invalid:
-		WSP(sp, SLT_VCL_error,
-		    "vmod esicookies http0: invalid header '%s'", hdr.b);
-		cs->used--;
-		return EINVAL;
 	}
-	return 0;
+	return (ret);
 }
 
 /*
@@ -358,19 +519,19 @@ vesico_analyze_cookie_header(struct sess *sp, const txt hdr,
  *   - domain?
  *   - path?
  *
- * returns error or empty string
+ * returns error or NULL
  */
 
 const char *H_COOKIE = "\007Cookie:";
 
 static const char *
-vesico_write_cookie_hdr(struct sess *sp, struct http0_meta *meta,
+vesico_write_cookie_hdr(struct sess *sp, struct vesico_req *m,
 			struct http *h0, struct cookiehead *cookies)
 {
 	unsigned	u;
 	char *b = NULL, *e = NULL;
 	struct cookie	*c;
-	struct ws	*ws = http0_get_mem(sp, meta);
+	struct ws	*ws = vesico_get_mem(sp, m);
 
 	u = WS_Reserve(ws, 0);
 	b = ws->f;
@@ -391,8 +552,9 @@ vesico_write_cookie_hdr(struct sess *sp, struct http0_meta *meta,
 		// data we read must not be from the ws we write to
 		assert(! ((c->name.b >= ws->s) && (c->name.e <= ws->e)));
 
-		unsigned l = (unsigned)(c->value.e - c->name.b);
-		// exclude whitespace from check
+		unsigned l = Tlen(c->name) +
+		    (c->value.b ? Tlen(c->value) : 0);
+
 		if (! (b + l + 2 < e)) {
 			WS_Release(ws, 0);
 			return "new cookies dont fit";
@@ -404,9 +566,11 @@ vesico_write_cookie_hdr(struct sess *sp, struct http0_meta *meta,
 
 		*b++ = '=';
 
-		l = Tlen(c->value);
-		memcpy(b, c->value.b, l);
-		b += l;
+		if (c->value.b) {
+			l = Tlen(c->value);
+			memcpy(b, c->value.b, l);
+			b += l;
+		}
 
 		b[0] = ';'; b[1] = ' ';
 		b += 2;
@@ -419,7 +583,7 @@ vesico_write_cookie_hdr(struct sess *sp, struct http0_meta *meta,
 
 	WS_ReleaseP(ws, b);
 
-	return "";
+	return (NULL);
 }
 
 /*
@@ -431,28 +595,33 @@ static const char *
 vesico_to_http0(struct sess *sp, struct vmod_priv *priv, enum gethdr_e where,
 		const char *hdr)
 {
-	struct http0_meta	*meta = priv->priv;
-
+	struct vesico_req	*m;
 	struct cookiehead	cookies =
 	    VSTAILQ_HEAD_INITIALIZER(cookies);
 	struct cookies	cs;
-
-	cs.used = 0;
 
 	struct http		*hp, *h0;
 	unsigned		n;
 	int			used;
 
+	unsigned		ret;
+	const char		*err;
+
+	cs.used = 0;
+
 	CHECK_OBJ_NOTNULL(sp, SESS_MAGIC);
+
+	m = vesico_req(sp, priv->priv);
+
+	vesico_clear_warn(m);
+	ret = VESICO_OK;
+
 	h0 = sp->http0;
 	CHECK_OBJ_NOTNULL(h0, HTTP_MAGIC);
-
-	CHECK_OBJ_NOTNULL(meta, VMOD_HTTP0_META_MAGIC);
 
 	/* collect existing cookies */
 	for (n = HTTP_HDR_FIRST; n < h0->nhd; n++) {
 		if (http_IsHdr(&h0->hd[n], H_COOKIE)) {
-			int			ret;
 			txt			h;
 
 			Tcheck(h0->hd[n]);
@@ -461,11 +630,10 @@ vesico_to_http0(struct sess *sp, struct vmod_priv *priv, enum gethdr_e where,
 				h.b++;
 			h.e = h0->hd[n].e;
 
-			ret = vesico_analyze_cookie_header(sp, h, &cookies,
+			ret = vesico_analyze_cookie_header(sp, m, h, &cookies,
 			    &cs);
-			if (ret) {
-				return strerror(ret);
-			}
+			if (ret != VESICO_OK)
+				return (vesico_err_str[ret]);
 		}
 	}
 
@@ -475,7 +643,6 @@ vesico_to_http0(struct sess *sp, struct vmod_priv *priv, enum gethdr_e where,
 	hp = vrt_selecthttp(sp, where);
 	for (n = HTTP_HDR_FIRST; n < hp->nhd; n++) {
 		if (http_IsHdr(&hp->hd[n], hdr)) {
-			int			ret;
 			txt			h;
 			char			*p;
 
@@ -490,25 +657,43 @@ vesico_to_http0(struct sess *sp, struct vmod_priv *priv, enum gethdr_e where,
 			else
 				h.e = hp->hd[n].e;
 
-			ret = vesico_analyze_cookie_header(sp, h, &cookies,
+			ret = vesico_analyze_cookie_header(sp, m, h, &cookies,
 			    &cs);
-			if (ret) {
-				return strerror(ret);
-			}
+			if (ret != VESICO_OK)
+				return (vesico_err_str[ret]);
 		}
 	}
 
 	/* if we haven't used any more cookies than we already had we're done */
 	if (used == cs.used)
-		return "";
+		return NULL;
 
-	return (vesico_write_cookie_hdr(sp, meta, h0, &cookies));
+	err = vesico_write_cookie_hdr(sp, m, h0, &cookies);
+	if (err)
+		return (err);
+
+	return NULL;
 }
 
 const char * __match_proto__()
 vmod_to_http0_e(struct sess *sp, struct vmod_priv *priv, enum gethdr_e where,
 		const char *hdr) {
 	return (vesico_to_http0(sp, priv, where, hdr));
+}
+
+const char * __match_proto__()
+vmod_warnings(struct sess *sp, struct vmod_priv *priv) {
+	struct vesico_req	*m;
+
+	CHECK_OBJ_NOTNULL(sp, SESS_MAGIC);
+	m = vesico_req(sp, priv->priv);
+
+	assert(m->warn < VESICO_WARN_LIM);
+
+	if (m->warn == VESICO_OK)
+		return NULL;
+
+	return (vesico_warn_str[m->warn]);
 }
 
 void __match_proto__()

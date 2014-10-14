@@ -7,8 +7,8 @@ Varnish Module for cookie handling with ESI
 -------------------------------------------
 
 :Author: Nils Goroll
-:Date: 2013-04-21
-:Version: 1.0
+:Date: 2014-10-14
+:Version: 1.1
 :Manual section: 3
 
 .. _synopsis:
@@ -21,17 +21,17 @@ SYNOPSIS
 	import esicookies;
 
 	sub vcl_fetch {
-	    	esicookies.to_http0(beresp.http.Set-Cookie);
-        }
+		esicookies.to_http0(beresp.http.Set-Cookie);
+	}
 
 	# OR
 
 	sub vcl_fetch {
 		set req.http.X-Err = esicookies.to_http0_e(beresp.http.Set-Cookie);
-		if (req.http.X-Err != "") {
+		if (req.http.X-Err) {
 			error 503 "Error in to_http0";
 		}
-		unset req.http.X-Err;
+		set req.http.X-Warn = esicookies.warnings();
 	}
 
 	sub vcl_error {
@@ -40,6 +40,11 @@ SYNOPSIS
 		}
 	}
 
+NOTE ON UPGRADING
+=================
+
+When upgrading from versions before 1.1, please see the history_ for
+important changes!
 
 DESCRIPTION
 ===========
@@ -81,6 +86,23 @@ Later ``Set-Cookie`` reponse headers overwrite Cookies present in the
 initial ``http0`` context ``Cookie`` headers or earlier ``Set-Cookie``
 reponse headers.
 
+Parse warnings are logged to VSM and can also be queried from VCL
+using the warnings_ function.
+
+For VSM logging, the ``VCL_error`` tag is used (because there is no
+tag for warnings). Log entries contain formation about Cookie
+elements being `tolerated` or `skipped` and a hint on where the parse
+warning occurred. The excerpt is limited to 40 characters from the
+Cookie line, if necessary. Sample output:
+
+::
+
+	13 VCL_error    c vmod esicookies http0 cookies tolerated in hdr:
+	13 VCL_error    c ...ngcookieline;ok=val;noval=;ok2=val;somuc...
+	13 VCL_error    c                        ^- empty cookie value
+
+
+
 to_http0_e
 ----------
 
@@ -88,23 +110,41 @@ Prototype
 	::
 
 		set ... = esicookies.to_http0_e(HEADER);
-		if (esicookies.to_http0_e(HEADER) ...)
+		if (esicookies.to_http0_e(HEADER))
 
 
-This form is semantically equivalent to tohttp0_ except that is
-returns a non-empty string when an error is encountered.
+This form is semantically equivalent to to_http0_ except that is
+returns a string when an error is encountered.
 
 Possible return strings are:
 
-* "Value too large for defined data type" or your current locale's
-  translation for ``EOVERFLOW``: too many cookies in use (see
+* ``exceeded number of allowed cookies``: too many cookies in use (see
   limitations_)
-* "Invalid argument" or your current locale's translation for
-  ``EINVAL``: a Cookie or Set-Cookie header had an illegal syntax
-* "new cookies: not even the header name fits"
-* "new cookies dont fit": Cookies don't fit into the workspace of size
+* ``new cookies: not even the header name fits`` and ``new cookies
+  dont fit``: Cookies don't fit into the workspace of size
   ``HTTP0_WS_SIZE`` (see limitations_)
 
+.. _warnings:
+
+warnings
+--------
+
+Prototype
+	::
+
+		set ... = esicookies.warnings();
+
+Returns a summary of parse warnings which have been encountered and
+logged to VSM.
+
+Possible return strings are:
+
+* ``cookies skipped``: Some Cookie header elements were skipped while
+  parsing (and are thus missing from the generated ``Cookie:`` header
+  for subsequent ESI requests).
+* ``cookies tolerated``: Some Cookie header elements were not properly
+  formatted (e.g. contained no value), but were processed anyway.
+* ``cookies skipped and tolerated``: Both of the above
 
 .. _limitations:
 
@@ -148,11 +188,30 @@ Make targets:
 * make install - installs your vmod in `VMODDIR`
 * make check - runs the unit tests in ``src/tests/*.vtc``
 
+CHANGES
 
-HISTORY
-=======
+.. _history:
 
-Version 1.0: Initial version.
+HISTORY / CHANGELOG
+===================
+
+* Version 1.0: Initial version.
+
+* Version 1.1: Initial version.
+
+  * to_http0_e_ now returns NULL when there was no error, contrary
+    to the empty string as before. This change is to avoid production
+    of invalid HTTP headers (without a value) when `to_http0_e_` is
+    used as in the examples shown.
+
+    Thus, to check for errors in VCL, if ``(... != "")`` needs to be
+    replaced with if ``(...)``.
+
+  * changed strings returned by to_http0_e_
+
+  * Added the warnings_ function and VSM logging for parse warnings.
+
+  * The parser is now more tolarant
 
 COPYRIGHT
 =========
@@ -160,5 +219,5 @@ COPYRIGHT
 This document is licensed under the same license as the
 libvmod-esicookies project. See LICENSE for details.
 
-Copyright (c) 2013 UPLEX Nils Goroll Systemoptimierung. All rights
+Copyright (c) 2013-2014 UPLEX Nils Goroll Systemoptimierung. All rights
 reserved.

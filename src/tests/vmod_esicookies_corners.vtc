@@ -64,8 +64,9 @@ server s1 {
 	# cookie with no value within cookie header
 	rxreq
 	expect req.url == "/c_no_val_middle"
-	expect req.http.Cookie == "ok=val; noval=; ok2=val;"
-	txresp -body {
+	expect req.http.Cookie == "somuchstufftoproduce=alongcookieline;ok=val;noval=;ok2=val;somuchmorestufftoproduce=alongcookieline"
+	txresp -hdr "Set-Cookie: fromresponse=" \
+	       -body {
 		<html>
 		Before include
 		<esi:include src="/i_no_val_middle"/>
@@ -73,7 +74,7 @@ server s1 {
 	}
 	rxreq
 	expect req.url == "/i_no_val_middle"
-	expect req.http.Cookie == "ok=val; noval=; ok2=val;"
+	expect req.http.Cookie == "somuchstufftoproduce=alongcookieline; ok=val; noval=; ok2=val; somuchmorestufftoproduce=alongcookieline; fromresponse="
 	txresp -body {Included file}
 
 	# cookie with empty value from response
@@ -89,7 +90,7 @@ server s1 {
 	}
 	rxreq
 	expect req.url == "/included5"
-	expect req.http.Cookie == "fromclient=1"
+	expect req.http.Cookie == "fromclient=1; fromresponse="
 	txresp -body {Included file}
 
 	# Set-Cookie response with name but no equals sign or value
@@ -146,12 +147,16 @@ varnish v1 -vcl+backend {
 
 	sub vcl_fetch {
 	    set req.http.X-Err = esicookies.to_http0_e(beresp.http.Set-Cookie);
+	    set req.http.X-Warn = esicookies.warnings();
 	    set beresp.do_esi = true;
 	}
 
 	sub vcl_deliver {
 	    if (req.http.X-Err) {
-	       set resp.http.X-Err = req.http.X-Err;
+		set resp.http.X-Err = req.http.X-Err;
+	    }
+	    if (req.http.X-Warn) {
+		set resp.http.X-Warn = req.http.X-Warn;
 	    }
 	}
 } -start
@@ -166,59 +171,67 @@ client c1 {
 		Included file
 		After include
 	}
-
 	expect resp.bodylen == 60
-	expect resp.http.X-Err == "Invalid argument"
+	expect resp.http.X-Err == <undef>
+	expect resp.http.X-Warn == "cookies tolerated"
 
 	# cookie with name but no equals sign or value from client
 	txreq -url "/includer2"	 -hdr "Cookie: fromclient"
 	rxresp
 	expect resp.bodylen == 60
-	expect resp.http.X-Err == "Invalid argument"
+	expect resp.http.X-Err == <undef>
+	expect resp.http.X-Warn == "cookies skipped"
 
 	# empty cookie header from client
 	txreq -url "/includer3"	 -hdr "Cookie:"
 	rxresp
 	expect resp.bodylen == 60
-	expect resp.http.X-Err == "Invalid argument"
+	expect resp.http.X-Err == <undef>
+	expect resp.http.X-Warn == <undef>
 
 	# cookie with equals sign and value but no name from client
 	txreq -url "/includer4"	 -hdr "Cookie: =1"
 	rxresp
 	expect resp.bodylen == 60
-	expect resp.http.X-Err == "Invalid argument"
+	expect resp.http.X-Err == <undef>
+	expect resp.http.X-Warn == "cookies skipped"
 
 	# cookie with no value within cookie header
-	txreq -url "/c_no_val_middle"	 -hdr "Cookie: ok=val; noval=; ok2=val;"
+	txreq -url "/c_no_val_middle"	 -hdr "Cookie: somuchstufftoproduce=alongcookieline;ok=val;noval=;ok2=val;somuchmorestufftoproduce=alongcookieline"
 	rxresp
 	expect resp.bodylen == 60
-	expect resp.http.X-Err == "Invalid argument"
+	expect resp.http.X-Err == <undef>
+	expect resp.http.X-Warn == "cookies tolerated"
 
 	# Set-Cookie response with empty value
 	txreq -url "/includer5" -hdr "Cookie: fromclient=1"
 	rxresp
 	expect resp.bodylen == 60
 	expect resp.http.Set-Cookie == "fromresponse="
-	expect resp.http.X-Err == "Invalid argument"
+	expect resp.http.X-Err == <undef>
+	expect resp.http.X-Warn == "cookies tolerated"
 
 	# Set-Cookie response with name but no equals sign or value
 	txreq -url "/includer6" -hdr "Cookie: fromclient=1"
 	rxresp
 	expect resp.bodylen == 60
 	expect resp.http.Set-Cookie == "fromresponse"
-	expect resp.http.X-Err == "Invalid argument"
+	expect resp.http.X-Err == <undef>
+	expect resp.http.X-Warn == "cookies skipped"
 
 	# empty Set-Cookie response
 	txreq -url "/includer7" -hdr "Cookie: fromclient=1"
 	rxresp
 	expect resp.bodylen == 60
 	expect resp.http.Set-Cookie == ""
-	expect resp.http.X-Err == "Invalid argument"
+	expect resp.http.X-Err == <undef>
+	expect resp.http.X-Warn == <undef>
 
 	# Set-Cookie response with equals sign and value but no name
 	txreq -url "/includer8" -hdr "Cookie: fromclient=1"
 	rxresp
 	expect resp.bodylen == 60
 	expect resp.http.Set-Cookie == "=1"
-	expect resp.http.X-Err == "Invalid argument"
+	expect resp.http.X-Err == <undef>
+	expect resp.http.X-Warn == "cookies skipped"
 } -run

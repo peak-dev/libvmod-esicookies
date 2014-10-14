@@ -55,22 +55,30 @@ varnish v1 -vcl+backend {
 		esicookies.to_http0(beresp.http.Set-Cookie);
 	    } else {
 		set req.http.X-Err = esicookies.to_http0_e(beresp.http.Set-Cookie);
-		if (req.http.X-Err != "") {
+		if (req.http.X-Err) {
 			error 503 "Error in to_http0";
 		}
-		unset req.http.X-Err;
+		set req.http.X-Warn = esicookies.warnings();
 	    }
 	    set beresp.do_esi = true;
 	}
 
 	sub vcl_error {
-		if (req.http.X-Err) {
-			set obj.http.X-Err = req.http.X-Err;
-		}
+		set obj.http.X-Err = req.http.X-Err;
+		set obj.http.X-Warn = req.http.X-Warn;
 	}
+
+	sub vcl_deliver {
+		set resp.http.X-Warn = req.http.X-Warn;
+	}
+
 } -start
 
 client c1 {
 	txreq -url "/"	-hdr "Cookie: fromclient=1"
 	rxresp
+	expect resp.status == 200
+	expect resp.http.Set-Cookie ==  "fromserver1=1"
+	expect resp.http.X-Warn == <undef>
+	expect resp.http.X-Err == <undef>
 } -run

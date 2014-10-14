@@ -7,10 +7,9 @@ sub vcl_fetch {
 	esicookies.to_http0(beresp.http.Set-Cookie);
     } else {
 	set req.http.X-Err = esicookies.to_http0_e(beresp.http.Set-Cookie);
-	if (req.http.X-Err != "") {
+	if (req.http.X-Err) {
 	    error 503 "Error in to_http0";
 	}
-	unset req.http.X-Err;
     }
     set beresp.do_esi = true;
 }
