@@ -605,7 +605,6 @@ vesico_to_http0(struct sess *sp, struct vmod_priv *priv, enum gethdr_e where,
 	int			used;
 
 	unsigned		ret;
-	const char		*err;
 
 	cs.used = 0;
 
@@ -668,11 +667,7 @@ vesico_to_http0(struct sess *sp, struct vmod_priv *priv, enum gethdr_e where,
 	if (used == cs.used)
 		return NULL;
 
-	err = vesico_write_cookie_hdr(sp, m, h0, &cookies);
-	if (err)
-		return (err);
-
-	return NULL;
+	return (vesico_write_cookie_hdr(sp, m, h0, &cookies));
 }
 
 const char * __match_proto__()
