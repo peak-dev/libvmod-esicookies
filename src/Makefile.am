@@ -13,7 +13,8 @@ libvmod_esicookies_la_LDFLAGS = $(AM_LDFLAGS) \
 	-module -export-dynamic -avoid-version -shared
 
 libvmod_esicookies_la_SOURCES = \
-	vmod_esicookies.c
+	vmod_esicookies.c	\
+	vmod_esicookies.h
 
 nodist_libvmod_esicookies_la_SOURCES = \
 	vcc_if.c \

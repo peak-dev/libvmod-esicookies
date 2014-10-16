@@ -33,6 +33,8 @@
  */
 
 #include "config.h"
+#include "vmod_esicookies.h"
+
 #include <ctype.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -40,7 +42,6 @@
 #include <sys/resource.h>
 #include "vrt.h"
 #include "vct.h"
-#include "cache.h"
 #include "vcc_if.h"
 #include "vas.h"
 
@@ -97,49 +98,11 @@ http_IsHdr(const txt *hh, const char *hdr)
 }
 #endif
 
-/* ----------------------------------------------------------------------
- * our own per-session workspaces for modifications of the http0 object.
- *
- * as long as we are sure to copy the Cookie header every time, we can always
- * copy from ws[0] to ws[1]
- *
- */
-
-struct vesico_req {
-	unsigned		magic;
-#define VESICO_REQ_MAGIC	0x6874306d
-
-	struct ws		ws[2];
-	unsigned		xid;
-	unsigned short		next_ws;
-
-	unsigned		warn;
-};
-
-#define VESICO_WS_SIZE (4*1024)
-
-struct vesico_meta {
-	unsigned		magic;
-#define VESICO_META_MAGIC	0x68746d6d
-	struct vesico_req	*mem;
-	unsigned		nmem;
-};
-
-/* return values */
-#define VESICO_OK		0
-#define VESICO_ERR_OVERFLOW	(1<<0)
-#define VESICO_ERR_LIM		(1<<1)
-
 const char * const vesico_err_str[VESICO_ERR_LIM] = {
 	[VESICO_OK] = "ok",
 	[VESICO_ERR_OVERFLOW] =
 	"exceeded number of allowed cookies"
 };
-
-/* warn member of vesico_req */
-#define VESICO_WARN_SKIPPED	(1<<0)
-#define VESICO_WARN_TOLERATED	(1<<1)
-#define VESICO_WARN_LIM	(1<<2)
 
 const char * const vesico_warn_str[VESICO_WARN_LIM] = {
 	[VESICO_OK] = "ok",
@@ -281,25 +244,6 @@ vesico_get_mem(struct sess *sp, struct vesico_req *m) {
 	ws = &m->ws[0];
 	m->next_ws = 1;
 	return (ws);
-};
-
-struct cookie {
-	VSTAILQ_ENTRY(cookie)	list;
-	txt			name;
-	txt			value;
-	int			valid;
-};
-VSTAILQ_HEAD(cookiehead, cookie);
-
-/*
- * http://webdesign.about.com/od/cookies/f/cookies-per-domain-limit.htm
- *  Chrome 9 allowed 180 cookies per domain
- */
-#define max_cookies	180
-
-struct cookies {
-	struct cookie		space[max_cookies];
-	int			used;
 };
 
 static struct cookie *
@@ -453,12 +397,6 @@ vesico_warn(struct sess *sp, struct vesico_req *m,
 	WSP(sp, SLT_VCL_error,
 	    "%*s^- %s", off, "", warn);
 }
-
-enum vesico_analyze_action {
-	VESICOAC_DEL = 0,
-	VESICOAC_ADD,
-	_VESICOAC_LIM
-};
 
 static int
 vesico_analyze_cookie_header(struct sess *sp, struct vesico_req *m,
