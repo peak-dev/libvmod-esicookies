@@ -104,7 +104,7 @@ Cookie line, if necessary. Sample output:
 
 ::
 
-	13 VCL_error    c vmod esicookies http0 cookies tolerated in hdr:
+	13 VCL_error    c vmod esicookies cookies tolerated in hdr:
 	13 VCL_error    c ...ngcookieline;ok=val;noval=;ok2=val;somuc...
 	13 VCL_error    c                        ^- empty cookie value
 
@@ -168,8 +168,16 @@ cookies:
 
 Other limitations:
 
-* Attributes in ``Set-Cookie`` response headers like ``Expires``,
-  ``Domain`` or ``Path`` are currently ignored.
+* Any attributes in ``Set-Cookie`` response headers but ``Expires``
+  and ``max-age`` are currently ignored.
+
+* The ``Set-Cookie`` attribues ``Expires`` and ``max-age`` are only
+  evaluated to determine if Cookies should be deleted due to the
+  respective date being in the past at the time a ``Set-Cookie`` is
+  processed.
+  Otherwise Cookies are assumed not to expire between the time of the
+  ``Set-Cookie`` response header being processed and the ``Cookie``
+  header being generated.
 
 * The Name of the ``Cookie`` header cannot currently be changed.
 

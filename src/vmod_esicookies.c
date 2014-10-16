@@ -394,7 +394,7 @@ vesico_warn(struct sess *sp, struct vesico_req *m,
 	}
 
 	WSP(sp, SLT_VCL_error,
-	    "vmod esicookies http0 %s in hdr:", vesico_warn_str[action]);
+	    "vmod esicookies %s in hdr:", vesico_warn_str[action]);
 	if (phdr.b) {
 		WSP(sp, SLT_VCL_error,
 		    "...%.40s%s", phdr.b,
@@ -508,7 +508,6 @@ vesico_analyze_cookie_header(struct sess *sp, struct vesico_req *m,
  *
  * TODO:
  * - check cookie attributes ?
- *   - expires?
  *   - domain?
  *   - path?
  *
@@ -634,26 +633,61 @@ vesico_to_http0(struct sess *sp, struct vmod_priv *priv, enum gethdr_e where,
 	/* collect cookies from the set-cookie hdr given */
 	hp = vrt_selecthttp(sp, where);
 	for (n = HTTP_HDR_FIRST; n < hp->nhd; n++) {
-		if (http_IsHdr(&hp->hd[n], hdr)) {
-			txt			h;
-			char			*p;
+		txt				h, c, arg;
+		enum vesico_analyze_action	act;
 
-			Tcheck(hp->hd[n]);
-			h.b = hp->hd[n].b + *hdr;
-			while (isspace(*(h.b)))
-				h.b++;
+		if (! http_IsHdr(&hp->hd[n], hdr))
+			continue;
 
-			p = strchr(h.b, ';');
-			if (p)
-				h.e = p;
-			else
-				h.e = hp->hd[n].e;
+		Tcheck(hp->hd[n]);
+		h.b = hp->hd[n].b + *hdr;
+		h.e = hp->hd[n].e;
 
-			ret = vesico_analyze_cookie_header(sp, m, h, &cookies,
-			    &cs, VESICOAC_ADD);
-			if (ret != VESICO_OK)
-				return (vesico_err_str[ret]);
+		/* handle invalid empty header */
+		if (Tlen(h) == 0)
+			continue;
+
+		/*
+		 * Diverging from
+		 * https://tools.ietf.org/html/rfc6265#section-5.2 :
+		 *
+		 * * we accept a cookie name withtout a value
+		 */
+
+		act = VESICOAC_ADD;
+
+		if (http_split(&h, ";", &c) == 0)
+			continue;
+
+		if (Tlen(c) == 0)
+			continue;
+
+		while (http_split(&h, ";", &arg)) {
+			txt	na, va;
+
+			if ((http_nv(arg, "=", &na, &va) == 0) ||
+			    (na.b == NULL) ||
+			    (va.b == NULL))
+				continue;
+
+			if (Tlen(na) != 7) {
+				//
+			} else if (strncasecmp(na.b, "Expires", 7) == 0) {
+				time_t t = TIM_parse(va.b);
+				if ((t != 0) &&
+				    (t < TIM_real()))
+					act = VESICOAC_DEL;
+			} else if (strncasecmp(na.b, "max-age", 7) == 0) {
+				if (*va.b == '-' ||
+				    (Tlen(va) == 1 && *va.b == '0'))
+					act = VESICOAC_DEL;
+			}
 		}
+
+		ret = vesico_analyze_cookie_header(sp, m, c, &cookies,
+		    &cs, act);
+		if (ret != VESICO_OK)
+			return (vesico_err_str[ret]);
 	}
 
 	/* if we haven't used any more cookies than we already had we're done */
