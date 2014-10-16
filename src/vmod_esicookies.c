@@ -326,7 +326,8 @@ http_split(txt *where, const char *sep, txt *tok)
  * return 0 if no seperator found (or only whitespace in where)
  * 1 otherwise
  *
- * name/value contain a NULL pointer if not found
+ * name/value contain a NULL pointers if not found
+ * otherwise assert(Tlen(name/value) > 0)
  */
 static int
 http_nv(const txt where, const char *sep, txt *name, txt *value)
@@ -342,18 +343,27 @@ http_nv(const txt where, const char *sep, txt *name, txt *value)
 
 	if (http_split(&work, sep, name) == 0) {
 		/*
-		 * only whitespace or seperator found: if the where arguemnt
+		 * only whitespace or seperator found: if the where argument
 		 * came from http_split, it implies we only have a seperator
-		 * with no name or value
+		 * with no name and no value
 		 */
 		value->b = NULL;
 		value->e = NULL;
 		return (1);
 	}
 
-	if (work.b >= where.e)
-		/* no seperator found */
-		return (0);
+	if (work.b >= where.e) {
+		if (name->b == where.b)
+			/* no seperator found */
+			return (0);
+
+		value->b = name->b;
+		value->e = name->e;
+		name->b = NULL;
+		name->e = NULL;
+
+		return (1);
+	}
 
 	(void)http_split(&work, sep, value);
 
