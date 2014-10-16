@@ -376,6 +376,45 @@ http_split(txt *where, const char *sep, txt *tok)
 	return (1);
 }
 
+/*
+ * split a name <sep> value element
+ *
+ * return 0 if no seperator found (or only whitespace in where)
+ * 1 otherwise
+ *
+ * name/value contain a NULL pointer if not found
+ */
+static int
+http_nv(const txt where, const char *sep, txt *name, txt *value)
+{
+	txt work;
+
+	AN(where.b);
+	AN(name);
+	AN(value);
+
+	work.b = where.b;
+	work.e = where.e;
+
+	if (http_split(&work, sep, name) == 0) {
+		/*
+		 * only whitespace or seperator found: if the where arguemnt
+		 * came from http_split, it implies we only have a seperator
+		 * with no name or value
+		 */
+		value->b = NULL;
+		value->e = NULL;
+		return (1);
+	}
+
+	if (work.b >= where.e)
+		/* no seperator found */
+		return (0);
+
+	(void)http_split(&work, sep, value);
+
+	return (1);
+}
 // XXX turn off logging?
 static inline void
 vesico_warn(struct sess *sp, struct vesico_req *m,
@@ -419,7 +458,7 @@ static int
 vesico_analyze_cookie_header(struct sess *sp, struct vesico_req *m,
 			     const txt hdr, struct cookiehead *cookies,
 			     struct cookies *cs) {
-	txt		work1, work2, elem, name, value;
+	txt		work1, elem, name, value;
 	struct cookie	*c, *c2;
 	unsigned	ret = VESICO_OK;
 
@@ -432,36 +471,27 @@ vesico_analyze_cookie_header(struct sess *sp, struct vesico_req *m,
 			continue;
 		}
 
-		if (Tlen(elem) == 0)
-			continue;
+		assert(Tlen(elem) > 0);
 
-		if (*elem.b == '=') {
+		if (http_nv(elem, "=", &name, &value) == 0) {
+			vesico_warn(sp, m, VESICO_WARN_SKIPPED,
+			    "no equals", hdr, elem);
+			continue;
+		}
+
+		if (name.b == NULL) {
 			vesico_warn(sp, m, VESICO_WARN_SKIPPED,
 			    "no name", hdr, elem);
 			continue;
 		}
 
-		work2.b = elem.b;
-		work2.e = elem.e;
+		assert(Tlen(name) > 0);
 
-		AN(http_split(&work2, "=", &name));
-
-		if (*work2.b != '=') {
-			vesico_warn(sp, m, VESICO_WARN_SKIPPED,
-			    "no equals", hdr, elem);
-			continue;
-		}
-		if (Tlen(name) == 0) {
-			vesico_warn(sp, m, VESICO_WARN_SKIPPED,
-			    "empty cookie name", hdr, elem);
-			continue;
-		}
-		if (! http_split(&work2, "=", &value) ||
-		    (value.b == NULL) ||
-		    (Tlen(value) == 0)) {
+		if (value.b == NULL)
 			vesico_warn(sp, m, VESICO_WARN_TOLERATED,
 			    "empty cookie value", hdr, name);
-		}
+		else
+			assert(Tlen(value) > 0);
 
 		if (cs->used >= max_cookies) {
 			ret |= VESICO_ERR_OVERFLOW;
