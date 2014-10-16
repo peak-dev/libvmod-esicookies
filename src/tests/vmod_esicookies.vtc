@@ -55,21 +55,28 @@ varnish v1 -vcl+backend {
 		esicookies.to_http0(beresp.http.Set-Cookie);
 	    } else {
 		set req.http.X-Err = esicookies.to_http0_e(beresp.http.Set-Cookie);
-		if (req.http.X-Err) {
+		if (req.http.X-Err && req.http.X-Err != "") {
 			error 503 "Error in to_http0";
 		}
 		set req.http.X-Warn = esicookies.warnings();
+		if (req.http.X-Warn == "") {
+		    unset req.http.X-Warn;
+		}
 	    }
 	    set beresp.do_esi = true;
 	}
 
 	sub vcl_error {
 		set obj.http.X-Err = req.http.X-Err;
-		set obj.http.X-Warn = req.http.X-Warn;
+		if (req.http.X-Warn) {
+			set obj.http.X-Warn = req.http.X-Warn;
+		}
 	}
 
 	sub vcl_deliver {
-		set resp.http.X-Warn = req.http.X-Warn;
+		if (req.http.X-Warn) {
+			set resp.http.X-Warn = req.http.X-Warn;
+		}
 	}
 
 } -start

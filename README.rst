@@ -7,7 +7,7 @@ Varnish Module for cookie handling with ESI
 -------------------------------------------
 
 :Author: Nils Goroll
-:Date: 2014-10-14
+:Date: 2014-10-16
 :Version: 1.1
 :Manual section: 3
 
@@ -24,14 +24,21 @@ SYNOPSIS
 		esicookies.to_http0(beresp.http.Set-Cookie);
 	}
 
-	# OR
+Reporting of errors and warnings:
+
+::
+
+	import esicookies;
 
 	sub vcl_fetch {
 		set req.http.X-Err = esicookies.to_http0_e(beresp.http.Set-Cookie);
-		if (req.http.X-Err) {
+		if (req.http.X-Err && req.http.X-Err != "") {
 			error 503 "Error in to_http0";
 		}
 		set req.http.X-Warn = esicookies.warnings();
+		if (req.http.X-Warn == "") {
+			unset req.http.X-Warn;
+		}
 	}
 
 	sub vcl_error {
@@ -90,7 +97,7 @@ Parse warnings are logged to VSM and can also be queried from VCL
 using the warnings_ function.
 
 For VSM logging, the ``VCL_error`` tag is used (because there is no
-tag for warnings). Log entries contain formation about Cookie
+tag for warnings). Log entries contain information about Cookie
 elements being `tolerated` or `skipped` and a hint on where the parse
 warning occurred. The excerpt is limited to 40 characters from the
 Cookie line, if necessary. Sample output:
@@ -159,6 +166,8 @@ cookies:
 
 * ``max_cookies``: Maximum number of cookies, defaults to 180
 
+Other limitations:
+
 * Attributes in ``Set-Cookie`` response headers like ``Expires``,
   ``Domain`` or ``Path`` are currently ignored.
 
@@ -167,7 +176,7 @@ cookies:
 INSTALLATION
 ============
 
-The source tree is based on autotools to configure the building, and
+The source distribution uses autotools to configure the build, and
 does also have the necessary bits in place to do functional unit tests
 using the varnishtest tool.
 
@@ -176,7 +185,8 @@ Usage::
  ./configure VARNISHSRC=DIR [VMODDIR=DIR]
 
 `VARNISHSRC` is the directory of the Varnish source tree for which to
-compile your vmod.
+compile your vmod. **On Linux, Varnish should be compiled against a current,
+system-installed libjemalloc** (see known_issues_).
 
 Optionally you can also set the vmod install directory by adding
 `VMODDIR=DIR` (defaults to the pkg-config discovered directory from your
@@ -184,11 +194,32 @@ Varnish installation).
 
 Make targets:
 
-* make - builds the vmod
-* make install - installs your vmod in `VMODDIR`
-* make check - runs the unit tests in ``src/tests/*.vtc``
+* ``make`` - builds the vmod
+* ``make install`` - installs your vmod in `VMODDIR`
+* ``make check`` - runs the unit tests in ``src/tests/*.vtc``
 
-CHANGES
+Running ``make check`` is strongly recommended.
+
+.. _known_issues:
+
+KNOWN ISSUES
+============
+
+* On Linux, if ``make check`` fails for `vmod_esicookies_reload.vtc`,
+  inspect the error log. If it reports a segmentation violation
+  (SIGSEGV) in varnishd, your varnish sources have most likely been
+  compiled with the bundled jemalloc. Please make sure that an
+  up-to-date `jemalloc` development package is installed on your
+  system (probably called `libjemalloc-dev` or `jemalloc-devel`) and
+  re-build Varnish. Check the `config.log` for a `No system jemalloc
+  found` warning and re-iterate if this warning is found.
+
+* Varnish 3 releases differ in their behaviour with regard to empty
+  headers. Setting a header to the result of the to_http0_e_ and
+  warnings_ functions may produce a header with no value.
+
+  To ensure compatibility with all Varnish 3 releases, always use the
+  checks for the empty header as in the examples given herein.
 
 .. _history:
 
@@ -199,13 +230,7 @@ HISTORY / CHANGELOG
 
 * Version 1.1: Initial version.
 
-  * to_http0_e_ now returns NULL when there was no error, contrary
-    to the empty string as before. This change is to avoid production
-    of invalid HTTP headers (without a value) when `to_http0_e_` is
-    used as in the examples shown.
-
-    Thus, to check for errors in VCL, if ``(... != "")`` needs to be
-    replaced with if ``(...)``.
+  * to_http0_e_ now returns NULL when there was no error.
 
   * changed strings returned by to_http0_e_
 

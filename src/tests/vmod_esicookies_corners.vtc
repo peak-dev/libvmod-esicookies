@@ -147,7 +147,13 @@ varnish v1 -vcl+backend {
 
 	sub vcl_fetch {
 	    set req.http.X-Err = esicookies.to_http0_e(beresp.http.Set-Cookie);
+	    if (req.http.X-Err == "") {
+		unset req.http.X-Err;
+	    }
 	    set req.http.X-Warn = esicookies.warnings();
+	    if (req.http.X-Warn == "") {
+		unset req.http.X-Warn;
+	    }
 	    set beresp.do_esi = true;
 	}
 
