@@ -8,6 +8,7 @@ Makefile.in
 *~
 vmod_esicookies.3
 README.html
+config*lineno
 
 /aclocal.m4
 /autom4te.cache/
