@@ -146,7 +146,7 @@ varnish v1 -vcl+backend {
 	import esicookies from "${vmod_topbuild}/src/.libs/libvmod_esicookies.so" ;
 
 	sub vcl_fetch {
-	    set req.http.X-Err = esicookies.to_http0_e(beresp.http.Set-Cookie);
+	    set req.http.X-Err = esicookies.to_esi_e(beresp.http.Set-Cookie);
 	    if (req.http.X-Err == "") {
 		unset req.http.X-Err;
 	    }

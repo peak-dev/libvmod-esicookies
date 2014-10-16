@@ -21,7 +21,7 @@ SYNOPSIS
 	import esicookies;
 
 	sub vcl_fetch {
-		esicookies.to_http0(beresp.http.Set-Cookie);
+		esicookies.to_esi(beresp.http.Set-Cookie);
 	}
 
 Reporting of errors and warnings:
@@ -31,9 +31,9 @@ Reporting of errors and warnings:
 	import esicookies;
 
 	sub vcl_fetch {
-		set req.http.X-Err = esicookies.to_http0_e(beresp.http.Set-Cookie);
+		set req.http.X-Err = esicookies.to_esi_e(beresp.http.Set-Cookie);
 		if (req.http.X-Err && req.http.X-Err != "") {
-			error 503 "Error in to_http0";
+			error 503 "Error in to_esi";
 		}
 		set req.http.X-Warn = esicookies.warnings();
 		if (req.http.X-Warn == "") {
@@ -69,21 +69,18 @@ FUNCTIONS
 
 See see synopsis_ for a typical (and the only tested) usage example.
 
-.. _tohttp0:
+.. _toesi:
 
-to_http0
+to_esi
 --------
 
 Prototype
 	::
 
-		esicookies.to_http0(HEADER);
+		esicookies.to_esi(HEADER);
 
 
-The ``http0`` context contains a copy of the original request headers
-as requested by the client.
-
-When the ``to_http0`` function is called, all instances of the named
+When the ``to_esi`` function is called, all instances of the named
 ``Set-Cookie`` reponse header and the original request's ``Cookie``
 headers are parsed and a new ``Cookie`` header is generated in the
 ``http0`` context, which will be used for subsequent ESI requests and
@@ -110,17 +107,17 @@ Cookie line, if necessary. Sample output:
 
 
 
-to_http0_e
+to_esi_e
 ----------
 
 Prototype
 	::
 
-		set ... = esicookies.to_http0_e(HEADER);
-		if (esicookies.to_http0_e(HEADER))
+		set ... = esicookies.to_esi_e(HEADER);
+		if (esicookies.to_esi_e(HEADER))
 
 
-This form is semantically equivalent to to_http0_ except that is
+This form is semantically equivalent to to_esi_ except that is
 returns a string when an error is encountered.
 
 Possible return strings are:
@@ -229,7 +226,7 @@ KNOWN ISSUES
      warning is found.
 
 * Varnish 3 releases differ in their behaviour with regard to empty
-  headers. Setting a header to the result of the to_http0_e_ and
+  headers. Setting a header to the result of the to_esi_e_ and
   warnings_ functions may produce a header with no value.
 
   To ensure compatibility with all Varnish 3 releases, always use the
@@ -244,13 +241,15 @@ HISTORY / CHANGELOG
 
 * Version 1.1: Initial version.
 
-  * to_http0_e_ now returns NULL when there was no error.
+  * to_esi_e_ now returns NULL when there was no error.
 
-  * changed strings returned by to_http0_e_
+  * changed strings returned by to_esi_e_
 
   * Added the warnings_ function and VSM logging for parse warnings.
 
   * The parser is now more tolarant
+
+  * rename `to_esi` to `to_esi` and `to_esi_e`  to `to_esi_e`
 
 COPYRIGHT
 =========

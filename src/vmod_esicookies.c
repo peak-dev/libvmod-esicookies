@@ -584,7 +584,7 @@ vesico_write_cookie_hdr(struct sess *sp, struct vesico_req *m,
  */
 
 static const char *
-vesico_to_http0(struct sess *sp, struct vmod_priv *priv, enum gethdr_e where,
+vesico_to_esi(struct sess *sp, struct vmod_priv *priv, enum gethdr_e where,
 		const char *hdr)
 {
 	struct vesico_req	*m;
@@ -698,9 +698,9 @@ vesico_to_http0(struct sess *sp, struct vmod_priv *priv, enum gethdr_e where,
 }
 
 const char * __match_proto__()
-vmod_to_http0_e(struct sess *sp, struct vmod_priv *priv, enum gethdr_e where,
+vmod_to_esi_e(struct sess *sp, struct vmod_priv *priv, enum gethdr_e where,
 		const char *hdr) {
-	return (vesico_to_http0(sp, priv, where, hdr));
+	return (vesico_to_esi(sp, priv, where, hdr));
 }
 
 const char * __match_proto__()
@@ -719,7 +719,7 @@ vmod_warnings(struct sess *sp, struct vmod_priv *priv) {
 }
 
 void __match_proto__()
-vmod_to_http0(struct sess *sp, struct vmod_priv *priv, enum gethdr_e where,
+vmod_to_esi(struct sess *sp, struct vmod_priv *priv, enum gethdr_e where,
 	      const char *hdr) {
-	return (void)(vesico_to_http0(sp, priv, where, hdr));
+	return (void)(vesico_to_esi(sp, priv, where, hdr));
 }

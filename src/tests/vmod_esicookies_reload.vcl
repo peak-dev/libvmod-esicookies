@@ -4,11 +4,11 @@
 
 sub vcl_fetch {
     if (req.url == "/body2") {
-	esicookies.to_http0(beresp.http.Set-Cookie);
+	esicookies.to_esi(beresp.http.Set-Cookie);
     } else {
-	set req.http.X-Err = esicookies.to_http0_e(beresp.http.Set-Cookie);
+	set req.http.X-Err = esicookies.to_esi_e(beresp.http.Set-Cookie);
 	if (req.http.X-Err && req.http.X-Err != "") {
-	    error 503 "Error in to_http0";
+	    error 503 "Error in to_esi";
 	}
     }
     set beresp.do_esi = true;
