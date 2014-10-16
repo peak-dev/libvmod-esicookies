@@ -454,13 +454,23 @@ vesico_warn(struct sess *sp, struct vesico_req *m,
 	    "%*s^- %s", off, "", warn);
 }
 
+enum vesico_analyze_action {
+	VESICOAC_DEL = 0,
+	VESICOAC_ADD,
+	_VESICOAC_LIM
+};
+
 static int
 vesico_analyze_cookie_header(struct sess *sp, struct vesico_req *m,
 			     const txt hdr, struct cookiehead *cookies,
-			     struct cookies *cs) {
+			     struct cookies *cs,
+			     enum vesico_analyze_action act) {
 	txt		work1, elem, name, value;
 	struct cookie	*c, *c2;
 	unsigned	ret = VESICO_OK;
+
+	assert(act >= 0);
+	assert(act < _VESICOAC_LIM);
 
 	work1.b = hdr.b;
 	work1.e = hdr.e;
@@ -498,6 +508,16 @@ vesico_analyze_cookie_header(struct sess *sp, struct vesico_req *m,
 			return (ret);
 		}
 
+		/* invalidate any previous cookies with this name */
+		c2 = vesico_cookie_lookup(cookies, name);
+		if (c2)
+			c2->valid = 0;
+
+		if (act == VESICOAC_DEL)
+			continue;
+
+		assert(act == VESICOAC_ADD);
+
 		c = &cs->space[cs->used++];
 
 		c->valid = 0;
@@ -526,11 +546,6 @@ vesico_analyze_cookie_header(struct sess *sp, struct vesico_req *m,
 		c->name.e = name.e;
 		c->value.b = value.b;
 		c->value.e = value.e;
-
-		/* check if seen before and, if yes, make that one invalid */
-		c2 = vesico_cookie_lookup(cookies, c->name);
-		if (c2)
-			c2->valid = 0;
 
 		c->valid = 1;
 		VSTAILQ_INSERT_TAIL(cookies, c, list);
@@ -660,7 +675,7 @@ vesico_to_http0(struct sess *sp, struct vmod_priv *priv, enum gethdr_e where,
 			h.e = h0->hd[n].e;
 
 			ret = vesico_analyze_cookie_header(sp, m, h, &cookies,
-			    &cs);
+			    &cs, VESICOAC_ADD);
 			if (ret != VESICO_OK)
 				return (vesico_err_str[ret]);
 		}
@@ -687,7 +702,7 @@ vesico_to_http0(struct sess *sp, struct vmod_priv *priv, enum gethdr_e where,
 				h.e = hp->hd[n].e;
 
 			ret = vesico_analyze_cookie_header(sp, m, h, &cookies,
-			    &cs);
+			    &cs, VESICOAC_ADD);
 			if (ret != VESICO_OK)
 				return (vesico_err_str[ret]);
 		}
