@@ -208,11 +208,17 @@ KNOWN ISSUES
 * On Linux, if ``make check`` fails for `vmod_esicookies_reload.vtc`,
   inspect the error log. If it reports a segmentation violation
   (SIGSEGV) in varnishd, your varnish sources have most likely been
-  compiled with the bundled jemalloc. Please make sure that an
-  up-to-date `jemalloc` development package is installed on your
-  system (probably called `libjemalloc-dev` or `jemalloc-devel`) and
-  re-build Varnish. Check the `config.log` for a `No system jemalloc
-  found` warning and re-iterate if this warning is found.
+  compiled with the (outdated) bundled jemalloc.
+
+  To avoid this issue, either
+
+  1. compile varnish ``--without-jemalloc``
+
+  2. or make sure that an up-to-date `jemalloc` development package is
+     installed on your system (probably called `libjemalloc-dev` or
+     `jemalloc-devel`) and re-build Varnish. Check the `config.log`
+     for a `No system jemalloc found` warning and re-iterate if this
+     warning is found.
 
 * Varnish 3 releases differ in their behaviour with regard to empty
   headers. Setting a header to the result of the to_http0_e_ and
