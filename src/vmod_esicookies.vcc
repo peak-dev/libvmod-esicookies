@@ -29,4 +29,6 @@ Module esicookies
 Init init_function
 Function STRING to_esi_e(PRIV_VCL, HEADER)
 Function VOID   to_esi(PRIV_VCL, HEADER)
+Function STRING to_http0_e(PRIV_VCL, HEADER)
+Function VOID   to_http0(PRIV_VCL, HEADER)
 Function STRING warnings(PRIV_VCL)

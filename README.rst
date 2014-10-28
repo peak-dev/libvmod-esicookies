@@ -150,6 +150,34 @@ Possible return strings are:
   formatted (e.g. contained no value), but were processed anyway.
 * ``cookies skipped and tolerated``: Both of the above
 
+.. _tohttp0:
+
+to_http0
+--------
+
+Prototype
+	::
+
+		esicookies.to_http0(HEADER);
+
+DEPRECATED. This function is an alias for ``to_esi()``, and is included
+for backwards compatibility with version 1.0. It will be removed in
+future versions.
+
+.. _tohttp0e:
+
+to_http0_e
+----------
+
+Prototype
+	::
+
+		set ... = esicookies.to_esi_e(HEADER);
+
+DEPRECATED. This function is an alias for ``to_esi_e()``, and is included
+for backwards compatibility with version 1.0. It will be removed in
+future versions.
+
 .. _limitations:
 
 LIMITATIONS
@@ -249,7 +277,7 @@ HISTORY / CHANGELOG
 
   * The parser is now more tolarant
 
-  * rename `to_esi` to `to_esi` and `to_esi_e`  to `to_esi_e`
+  * replace `to_http0` with `to_esi` and `to_http0_e` with `to_esi_e`
 
 COPYRIGHT
 =========

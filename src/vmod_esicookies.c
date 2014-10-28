@@ -723,3 +723,15 @@ vmod_to_esi(struct sess *sp, struct vmod_priv *priv, enum gethdr_e where,
 	      const char *hdr) {
 	return (void)(vesico_to_esi(sp, priv, where, hdr));
 }
+
+const char * __match_proto__()
+vmod_to_http0_e(struct sess *sp, struct vmod_priv *priv, enum gethdr_e where,
+		const char *hdr) {
+	return (vmod_to_esi_e(sp, priv, where, hdr));
+}
+
+void __match_proto__()
+vmod_to_http0(struct sess *sp, struct vmod_priv *priv, enum gethdr_e where,
+              const char *hdr) {
+	vmod_to_esi(sp, priv, where, hdr);
+}
